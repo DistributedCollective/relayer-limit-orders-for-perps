@@ -2,14 +2,18 @@ let configPath = process.argv?.[2] || "../.env";
 require("dotenv").config({ path: configPath });
 import { walletUtils, perpQueries, perpUtils } from "@sovryn/perpetual-swap";
 
-const { MANAGER_ADDRESS, NODE_URLS, OWNER_ADDRESS, MAX_BLOCKS_BEFORE_RECONNECT, TELEGRAM_BOT_SECRET, TELEGRAM_CHANNEL_ID } = process.env;
-const { getSigningManagersConnectedToRandomNode, getNumTransactions } = walletUtils;
+const { MANAGER_ADDRESS, NODE_URLS, ORDER_BOOK_ADDRESS, MNEMONIC, MAX_BLOCKS_BEFORE_RECONNECT, TELEGRAM_BOT_SECRET, TELEGRAM_CHANNEL_ID } = process.env;
+import {checkFundingHealth, getPerpetualIds} from './utilFunctions';
+const { getSigningContractInstance } = walletUtils;
 import TelegramNotifier from "./notifier/TelegramNotifier";
 import { v4 as uuidv4 } from "uuid";
 const fetch = require("node-fetch");
 const { queryTraderState, queryAMMState, queryPerpParameters } = perpQueries;
 
-let orderbook = Array();
+/**
+ * [perpId]: [{...}, {...}]
+ */
+let orderbooks = {};
 
 const runId = uuidv4();
 console.log(`runId: ${runId}`);
@@ -17,19 +21,27 @@ let notifier = getTelegramNotifier(TELEGRAM_BOT_SECRET, TELEGRAM_CHANNEL_ID);
 
 (async function main() {
     try {
-        let [driverManager, ...signingManagers] = await getConnectedAndFundedSigners(0, 11);
+        let [
+            [driverLOB, ...signingLOBs], 
+            [driverManager, ...signingManagers]
+        ] = await Promise.all([
+            getConnectedAndFundedSigners('LimitOrderBook', ORDER_BOOK_ADDRESS, 0, 11, true),
+            getConnectedAndFundedSigners('LimitOrderBook', ORDER_BOOK_ADDRESS, 0, 11, true)
+        ]);
 
-        orderbook = await initializeRelayer(signingManagers);
+
+        orderbooks = await initializeRelayer(signingLOBs);
 
         if(process.env.HEARTBEAT_SHOULD_RESTART_URL){
-            let intervalId = setInterval( () => shouldRestart(runId, 'LIQ_BLOCK_PROCESSED'), 5_000);
+            let intervalId = setInterval( () => shouldRestart(runId, 'RELAYER_ORDERBOOK_BLOCK_PROCESSED'), 5_000);
+            let intervalId2 = setInterval( () => shouldRestart(runId, 'RELAYER_MANAGER_BLOCK_PROCESSED'), 5_000);
         } else {
             console.warn("Env var HEARTBEAT_SHOULD_RESTART_URL is not set, so if the nodes are pausing the connection, can not restart automatically.");
         }
 
         while (true) {
             try {
-                let res = await runForNumBlocks(driverManager, signingManagers, MAX_BLOCKS_BEFORE_RECONNECT);
+                let res = await runForNumBlocks(driverLOB, signingLOBs, MAX_BLOCKS_BEFORE_RECONNECT);
                 console.log(`Ran for ${MAX_BLOCKS_BEFORE_RECONNECT}`);
             } catch (error) {
                 console.log(`Error in while(true):`, error);
@@ -37,10 +49,10 @@ let notifier = getTelegramNotifier(TELEGRAM_BOT_SECRET, TELEGRAM_CHANNEL_ID);
             }
 
             //remove event listeners and reconnect
-            driverManager.provider.removeAllListeners();
-            driverManager.removeAllListeners();
+            driverLOB.provider.removeAllListeners();
+            driverLOB.removeAllListeners();
 
-            [driverManager, ...signingManagers] = await getConnectedAndFundedSigners(0, 11);
+            [driverLOB, ...signingLOBs] = await getConnectedAndFundedSigners('LimitOrderBook', ORDER_BOOK_ADDRESS, 0, 11, true);
         }
     } catch (error) {
         console.log(`General error while liquidating users, exiting process`, error);
@@ -60,7 +72,17 @@ let notifier = getTelegramNotifier(TELEGRAM_BOT_SECRET, TELEGRAM_CHANNEL_ID);
     })
  }
 
-async function initializeRelayer(signingManagers){
+async function initializeRelayer(signingLOBs){
+    let driverManager = signingLOBs[0];
+    const perpetualIds = (await getPerpetualIds(driverManager)) || [];
+    /**
+     * TODO
+     * using the first digest (0x000...), get the orders by calling pollLimitOrders(), until we get orderCount num of orders
+     */
+
+    for(const perpId of perpetualIds){
+
+    }
     return [];
 }
 
@@ -72,7 +94,8 @@ async function shouldRestart(runId, heartbeatCode){
             return;
         }
         
-        let res = await fetch(heartbeatUrl + `/${runId}/${heartbeatCode}`, {
+        let url = heartbeatUrl + `/${runId}/${heartbeatCode}`;
+        let res = await fetch(url, {
             method: "GET",
             headers: {
                 "Accept": "application/json",
@@ -89,7 +112,7 @@ async function shouldRestart(runId, heartbeatCode){
 
         let restartRes = await res.json();
         if(restartRes?.shouldRestart){
-            console.warn(`Restarting ${runId}. Time since last heartbeat: ${res?.timeSinceLastHeartbeat}`);
+            console.warn(`Restarting ${runId}, code ${heartbeatCode}. Time since last heartbeat: ${res?.timeSinceLastHeartbeat} (${url})`);
             process.exit(1);
         }
     } catch (error) {
@@ -97,10 +120,10 @@ async function shouldRestart(runId, heartbeatCode){
     }
 }
 
-async function getConnectedAndFundedSigners(fromWallet, numSigners, includeDriverManager = true) {
+async function getConnectedAndFundedSigners(abiName, ctrAddr, fromWallet, numSigners, includeDriverManager = true) {
     let bscNodeURLs = JSON.parse(NODE_URLS || "[]");
     let signers = Array();
-    let areLiquidatorsFunded = Array();
+    let areRelayersFunded = Array();
     let numRetries = 0;
     let maxRetries = 10;
     let included = false;
@@ -110,37 +133,37 @@ async function getConnectedAndFundedSigners(fromWallet, numSigners, includeDrive
     while (true) {
         try {
             //get an array of signingWallets
-            signers = getSigningManagersConnectedToRandomNode(MANAGER_ADDRESS, MNEMONIC, bscNodeURLs, fromWallet, numSigners) || [];
+            signers = getSigningContractInstance(ctrAddr, MNEMONIC, bscNodeURLs, abiName, fromWallet, numSigners) || [];
 
-            //get the number of liquidations each can make [{[liquidatorAddress]: numLiquidations}]
+            //get the number of Relayings each can make [{[relayerAddress]: numRelayings}]
             //this also checks whether the signingManagers are connected and the node responds properly
-            // areLiquidatorsFunded = await checkFundingHealth(signers);
-            areLiquidatorsFunded = areLiquidatorsFunded.sort((a, b) => {
-                let [liqAddrA, numLiquidationsA] = Object.entries(a)[0];
-                let [liqAddrB, numLiquidationsB] = Object.entries(b)[0];
-                return parseInt(numLiquidationsB as any) - parseInt(numLiquidationsA as any);
+            areRelayersFunded = await checkFundingHealth(signers);
+            areRelayersFunded = areRelayersFunded.sort((a, b) => {
+                let [relayerAddrA, numRelayingsA] = Object.entries(a)[0];
+                let [relayerAddrB, numRelayingsB] = Object.entries(b)[0];
+                return parseInt(numRelayingsB as any) - parseInt(numRelayingsA as any);
             });
-            for (let i = 0; i < areLiquidatorsFunded.length; i++) {
-                let liquidator = areLiquidatorsFunded[i];
-                let [liqAddr, numLiquidations] = Object.entries(liquidator)[0];
-                if (typeof numLiquidations !== "number") {
-                    console.log(`Unable to instantiate signer with address ${liqAddr}, i=${i}, ${(numLiquidations as any).toString()}`);
+            for (let i = 0; i < areRelayersFunded.length; i++) {
+                let relayer = areRelayersFunded[i];
+                let [relayerAddr, numRelayings] = Object.entries(relayer)[0];
+                if (typeof numRelayings !== "number") {
+                    console.log(`Unable to instantiate signer with address ${relayerAddr}, i=${i}, ${(numRelayings as any).toString()}`);
                     continue;
                 }
-                if (numLiquidations > 0) {
+                if (numRelayings > 0) {
                     fundedSigners.push(signers[i]);
-                    fundedWalletAddresses.push(liquidator);
+                    fundedWalletAddresses.push(relayer);
                     continue;
                 }
                 if (includeDriverManager && !included) {
                     fundedSigners.unshift(signers[i]);
-                    fundedWalletAddresses.unshift(liquidator);
+                    fundedWalletAddresses.unshift(relayer);
                     included = true;
                 }
             }
             if (fundedSigners.length === 0 || (includeDriverManager && fundedSigners.length === 1)) {
-                let msg = `[${new Date()}] WARN: there are no funded liquidators. Can not liquidate because there are no tx fee sufficient funds in the selected wallets. Retrying! ${JSON.stringify(
-                    areLiquidatorsFunded,
+                let msg = `[${new Date()}] WARN: there are no funded relaying wallets. Can not route orders because there are no enough tx fee funds in the selected wallets. Retrying! ${JSON.stringify(
+                    areRelayersFunded,
                     null,
                     2
                 )}`;
@@ -161,7 +184,7 @@ async function getConnectedAndFundedSigners(fromWallet, numSigners, includeDrive
     }
     
     let timeEnd = new Date().getTime();
-    console.log(`(${timeEnd - timeStart} ms) Funded liquidator wallets after ${numRetries} connection attempts:`, fundedWalletAddresses);
+    console.log(`(${timeEnd - timeStart} ms) Funded wallets after ${numRetries} connection attempts:`, fundedWalletAddresses);
     return fundedSigners;
 }
 function getTelegramNotifier(telegramSecret, telegramChannel) {
