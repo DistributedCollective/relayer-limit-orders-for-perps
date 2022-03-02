@@ -1,4 +1,6 @@
-let configPath = process.argv?.[2] || '../.env';
+const configFileName = process.argv?.[2] || '../.env';
+const path = require('path');
+let configPath = path.resolve(__dirname, '../', configFileName);
 require('dotenv').config({ path: configPath });
 import { walletUtils, perpQueries, perpUtils } from '@sovryn/perpetual-swap';
 
@@ -11,17 +13,20 @@ const {
   TELEGRAM_BOT_SECRET,
   TELEGRAM_CHANNEL_ID,
 } = process.env;
-import { checkFundingHealth, getPerpetualIds } from './utilFunctions';
+
+if (!MNEMONIC) {
+  console.log(`ERROR: Mnemonic is not present.`);
+  process.exit(1);
+}
+
+import { checkFundingHealth } from './utilFunctions';
 const { getSigningContractInstance } = walletUtils;
 import TelegramNotifier from './notifier/TelegramNotifier';
 import { v4 as uuidv4 } from 'uuid';
 const fetch = require('node-fetch');
 const { queryTraderState, queryAMMState, queryPerpParameters } = perpQueries;
 
-/**
- * [perpId]: [{...}, {...}]
- */
-let orderbooks = {};
+let orderbook = Array();
 
 const runId = uuidv4();
 console.log(`runId: ${runId}`);
@@ -47,7 +52,7 @@ let notifier = getTelegramNotifier(TELEGRAM_BOT_SECRET, TELEGRAM_CHANNEL_ID);
         ),
       ]);
 
-    orderbooks = await initializeRelayer(signingLOBs);
+    orderbook = await initializeRelayer(signingLOBs);
 
     if (process.env.HEARTBEAT_SHOULD_RESTART_URL) {
       let intervalId = setInterval(
@@ -128,16 +133,32 @@ function runForNumBlocks<T>(
 }
 
 async function initializeRelayer(signingLOBs) {
-  let driverManager = signingLOBs[0];
-  const perpetualIds = (await getPerpetualIds(driverManager)) || [];
+  let driverLOB = signingLOBs[0];
+  let lastDigest = '0x0';
+  let batchSize = 100;
+  let result = Array();
   /**
    * TODO
    * using the first digest (0x000...), get the orders by calling pollLimitOrders(), until we get orderCount num of orders
    */
-
-  for (const perpId of perpetualIds) {
+  let ordersBatch = Array();
+  let digestsBatch = Array();
+  do {
+    [ordersBatch, digestsBatch] = await driverLOB.pollLimitOrders(
+      lastDigest,
+      batchSize
+    );
+    lastDigest = digestsBatch[digestsBatch.length - 1];
+    result = result.concat(ordersBatch);
+  } while (ordersBatch.length === batchSize);
+  let numOrders = await driverLOB.orderCount();
+  numOrders = parseInt(numOrders);
+  if (numOrders !== result.length) {
+    const msg = `The orderCount (${numOrders}) is different than the actual orders returned (${ordersBatch.length})`;
+    console.error(msg);
+    throw new Error(msg);
   }
-  return [];
+  return orderbook;
 }
 
 async function shouldRestart(runId, heartbeatCode) {
@@ -209,7 +230,8 @@ async function getConnectedAndFundedSigners(
 
       //get the number of Relayings each can make [{[relayerAddress]: numRelayings}]
       //this also checks whether the signingManagers are connected and the node responds properly
-      areRelayersFunded = await checkFundingHealth(signers);
+      let gasAmount = abiName === 'IPerpetualManager' ? 1_000_000 : 4_000_000;
+      areRelayersFunded = await checkFundingHealth(signers, gasAmount);
       areRelayersFunded = areRelayersFunded.sort((a, b) => {
         let [relayerAddrA, numRelayingsA] = Object.entries(a)[0];
         let [relayerAddrB, numRelayingsB] = Object.entries(b)[0];
@@ -251,7 +273,7 @@ async function getConnectedAndFundedSigners(
       }
       break;
     } catch (error) {
-      console.log;
+      console.log(error);
       numRetries++;
       if (numRetries >= maxRetries) {
         let msg = `[${new Date()}] FATAL: could not connect to a node after ${maxRetries} attempts. Exiting!`;
