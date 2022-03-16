@@ -1,5 +1,6 @@
 import { walletUtils, perpQueries, perpUtils } from '@sovryn/perpetual-swap';
 import { perpMath } from '@sovryn/perpetual-swap';
+import { ABK64x64ToFloat } from '@sovryn/perpetual-swap/dist/scripts/utils/perpMath';
 import { Contract, BigNumber as BN, BigNumberish, BytesLike, } from "ethers";
 const ethers = require('ethers');
 const { floatToABK64x64 } = perpMath;
@@ -8,18 +9,18 @@ const { getSigningManagersConnectedToRandomNode, getNumTransactions } =
     walletUtils;
 const ONE_64x64 = BN.from("0x010000000000000000");
 
-// export type Order = {
-//     iPerpetualId: string;
-//     address: string;
-//     fAmount: number;
-//     fLimitPrice: number;
-//     fTriggerPrice: number;
-//     iDeadline: number;
-//     referrerAddr: string;
-//     flags: number;
-//     fLeverage: number; // 0 if deposit and trade separat;
-//     createdTimestamp: number;
-// };
+export type OrderTS = {
+    iPerpetualId: string;
+    traderAddr: string;
+    fAmount: number;
+    fLimitPrice: number;
+    fTriggerPrice: number;
+    iDeadline: number;
+    referrerAddr: string;
+    flags: number;
+    fLeverage: number; // 0 if deposit and trade separat;
+    createdTimestamp: number;
+};
 
 type Order = {
   iPerpetualId: BytesLike;
@@ -42,6 +43,7 @@ const MASK_USE_TARGET_LEVERAGE = BN.from("0x08000000");
 const MASK_LIMIT_ORDER = BN.from("0x04000000");
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000"; 
 
+console.log(`---------------MASK_LIMIT_ORDER`, MASK_LIMIT_ORDER.toNumber(), MASK_CLOSE_ONLY.toNumber());
 export async function checkFundingHealth(
     accounts,
     gasAmount: number = 4_000_000
@@ -102,6 +104,8 @@ export async function createLimitOrder(limitOrderBook: Contract, perpetualId, tr
       leverage = floatToABK64x64(0);
   }
 
+  console.log(`==========sending to perpId`, perpetualId)
+
   let order: Order = {
       iPerpetualId: perpetualId,
       traderAddr: account,
@@ -118,8 +122,26 @@ export async function createLimitOrder(limitOrderBook: Contract, perpetualId, tr
   let signature = await createSignature(order, true, signer, managerAddr, chainId);
   let tx1 = await limitOrderBook.createLimitOrder(order, signature, ONE_64x64.mul(2), { gasLimit: 3_000_000 });
   
+  console.log(`---------order created in orderbook`, tx1);
 
-  tx1 = await limitOrderBook.executeLimitOrder(order, { gasLimit: 3_000_000 });
+  // tx1 = await limitOrderBook.executeLimitOrder(order, { gasLimit: 3_000_000 });
 
   return tx1;
+}
+
+export function parseOrder(order: Order): OrderTS{
+  
+  let res: OrderTS = {
+    iPerpetualId: order.iPerpetualId.toString(),
+    traderAddr: order.traderAddr,
+    fAmount: ABK64x64ToFloat(order.fAmount as BN),
+    fLimitPrice: order.fLimitPrice,
+    fTriggerPrice: ABK64x64ToFloat(order.fTriggerPrice as BN),
+    iDeadline: (order.iDeadline as BN).toNumber(),
+    referrerAddr: order.referrerAddr,
+    flags: order.flags as number,
+    fLeverage: ABK64x64ToFloat(order.fLeverage as BN), // 0 if deposit and trade order.
+    createdTimestamp: (order.createdTimestamp as BN).toNumber(),
+  }
+  return res;
 }

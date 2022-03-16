@@ -1,4 +1,4 @@
-const configFileName = process.argv?.[2] || '../.env';
+const configFileName = process.argv?.[2] || '.env';
 const path = require('path');
 let configPath = path.resolve(__dirname, '../', configFileName);
 require('dotenv').config({ path: configPath });
@@ -23,6 +23,7 @@ import {
     checkFundingHealth,
     addOrderToOrderbook,
     sortOrderbook,
+    parseOrder,
 } from './utilFunctions';
 const { getSigningContractInstance } = walletUtils;
 import TelegramNotifier from './notifier/TelegramNotifier';
@@ -117,11 +118,11 @@ let notifier = getTelegramNotifier(TELEGRAM_BOT_SECRET, TELEGRAM_CHANNEL_ID);
         }
     } catch (error) {
         console.log(
-            `General error while liquidating users, exiting process`,
+            `[RELAYER] General error while relaying orders, exiting process`,
             error
         );
         await notifier.sendMessage(
-            `General error while liquidating users: ${(error as any).message
+            `[RELAYER] General error while liquidating users: ${(error as any).message
             }. Exiting.`
         );
         process.exit(1);
@@ -152,8 +153,8 @@ function runForNumBlocksManager<T>(
          * - call executeLimitOrder
          */
 
-        driverManager.on('block', async (blockNumber) => { 
-            
+        driverManager.provider.on('block', async (blockNumber) => {
+
         });
     });
 }
@@ -187,7 +188,8 @@ function runForNumBlocksLimitOrder<T>(
 
 async function initializeRelayer(signingLOBs) {
     let driverLOB = signingLOBs[0];
-    let lastDigest = '0x0';
+    //the 0x0 value for the firstDigest actually. We start from it and ask for orders in batches of batchSize
+    let lastDigest = '0x0000000000000000000000000000000000000000000000000000000000000000';
     let batchSize = 100;
     let result = Array();
     let ordersBatch = Array();
@@ -197,8 +199,17 @@ async function initializeRelayer(signingLOBs) {
             lastDigest,
             batchSize
         );
+        let lastBatchElemIdx = digestsBatch.length - 1;
+        //the pollLimitOrders method returns the batches filled with zero-values if there are not enough orders to fill the batch, so we get rid of the empty ones
+        while (parseInt(digestsBatch[lastBatchElemIdx]) === 0) {
+            //remove the last element of the batch. Array.pop() or Array.slice() didn't work
+            digestsBatch = digestsBatch.slice(0, lastBatchElemIdx);
+            ordersBatch = ordersBatch.slice(0, lastBatchElemIdx);
+            lastBatchElemIdx = digestsBatch.length - 1;
+        }
+
         lastDigest = digestsBatch[digestsBatch.length - 1];
-        result = result.concat(ordersBatch);
+        result = result.concat(ordersBatch.map( o => parseOrder(o)));
     } while (ordersBatch.length === batchSize);
     let numOrders = await driverLOB.orderCount();
     numOrders = parseInt(numOrders);
