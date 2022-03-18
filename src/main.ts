@@ -23,7 +23,7 @@ import {
     checkFundingHealth,
     addOrderToOrderbook,
     sortOrderbook,
-    parseOrder,
+    orderToOrderTS,
 } from './utilFunctions';
 const { getSigningContractInstance } = walletUtils;
 import TelegramNotifier from './notifier/TelegramNotifier';
@@ -209,7 +209,7 @@ async function initializeRelayer(signingLOBs) {
         }
 
         lastDigest = digestsBatch[digestsBatch.length - 1];
-        result = result.concat(ordersBatch.map( o => parseOrder(o)));
+        result = result.concat(ordersBatch.map( o => orderToOrderTS(o)));
     } while (ordersBatch.length === batchSize);
     let numOrders = await driverLOB.orderCount();
     numOrders = parseInt(numOrders);

@@ -43,7 +43,6 @@ const MASK_USE_TARGET_LEVERAGE = BN.from("0x08000000");
 const MASK_LIMIT_ORDER = BN.from("0x04000000");
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000"; 
 
-console.log(`---------------MASK_LIMIT_ORDER`, MASK_LIMIT_ORDER.toNumber(), MASK_CLOSE_ONLY.toNumber());
 export async function checkFundingHealth(
     accounts,
     gasAmount: number = 4_000_000
@@ -104,8 +103,6 @@ export async function createLimitOrder(limitOrderBook: Contract, perpetualId, tr
       leverage = floatToABK64x64(0);
   }
 
-  console.log(`==========sending to perpId`, perpetualId)
-
   let order: Order = {
       iPerpetualId: perpetualId,
       traderAddr: account,
@@ -120,16 +117,19 @@ export async function createLimitOrder(limitOrderBook: Contract, perpetualId, tr
   };
   let chainId = (await limitOrderBook.provider.getNetwork()).chainId;
   let signature = await createSignature(order, true, signer, managerAddr, chainId);
-  let tx1 = await limitOrderBook.createLimitOrder(order, signature, ONE_64x64.mul(2), { gasLimit: 3_000_000 });
+
+  let tx1 = await limitOrderBook.createLimitOrder(order, signature, { gasLimit: 3_000_000 });
   
+  tx1 = await tx1.wait();
   console.log(`---------order created in orderbook`, tx1);
+  
 
   // tx1 = await limitOrderBook.executeLimitOrder(order, { gasLimit: 3_000_000 });
 
   return tx1;
 }
 
-export function parseOrder(order: Order): OrderTS{
+export function orderToOrderTS(order: Order): OrderTS{
   
   let res: OrderTS = {
     iPerpetualId: order.iPerpetualId.toString(),
@@ -144,4 +144,32 @@ export function parseOrder(order: Order): OrderTS{
     createdTimestamp: (order.createdTimestamp as BN).toNumber(),
   }
   return res;
+}
+
+export function getMatchingOrders(orderbook: OrderTS[], markPrice: number): OrderTS[]{
+
+  return orderbook.filter( o => orderTradeable(o, markPrice))
+}
+
+function orderTradeable(order: Order, markPrice: number): Boolean{
+
+  // Buy orders
+  if(order.fAmount > 0){
+    if(order.fTriggerPrice && markPrice <= order.fTriggerPrice) return true; //stop loss order
+    if(!order.fTriggerPrice && markPrice <= order.fLimitPrice) return true;
+    return false;
+  }
+
+  //Sell orders
+  if(order.fTriggerPrice && markPrice >= order.fTriggerPrice) return true; //stop loss order
+  if(!order.fTriggerPrice && markPrice >= order.fLimitPrice) return true;
+  return false;
+}
+
+export async function executeOrder(signerLoB, order: OrderTS ){
+  try {
+    await signerLoB.executeLimitOrder(order)
+  } catch (error) {
+    
+  }
 }
