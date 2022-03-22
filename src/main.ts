@@ -27,6 +27,7 @@ import {
     sendHeartBeat,
     getMatchingOrders,
     executeOrders,
+    unlockOrder,
 } from './utilFunctions';
 const { getSigningContractInstance } = walletUtils;
 import TelegramNotifier from './notifier/TelegramNotifier';
@@ -36,6 +37,7 @@ const fetch = require('node-fetch');
 const { queryTraderState, queryAMMState, queryPerpParameters } = perpQueries;
 
 let orderbook = Array();
+let originalOrders = Object();
 let perpIds = Array();
 
 const runId = uuidv4();
@@ -55,7 +57,7 @@ let notifier = getTelegramNotifier(TELEGRAM_BOT_SECRET, TELEGRAM_CHANNEL_ID);
                 ),
                 getConnectedAndFundedSigners(
                     'IPerpetualManager',
-                    ORDER_BOOK_ADDRESS,
+                    MANAGER_ADDRESS,
                     0,
                     11,
                     true
@@ -168,9 +170,10 @@ function runForNumBlocksManager<T>(
                 for (const perpId of perpIds) {
                     let ammData = await queryAMMState(driverManager, perpId);
                     let markPrice = getMarkPrice(ammData);
-                    let tradeableOrders = getMatchingOrders(orderbook, markPrice);
-                    if (tradeableOrders.length){
+                    let tradeableOrders = getMatchingOrders(orderbook, markPrice).map( o => originalOrders[o.digest]);
+                    if (tradeableOrders.length) {
                         let res = await executeOrders(signingLoBs, tradeableOrders);
+                        console.log(`----------relayed orders`, res);
                     }
                 }
                 let timeEnd = new Date().getTime();
@@ -220,7 +223,8 @@ function runForNumBlocksLimitOrder<T>(
             'PerpetualLimitOrderCreated',
             async (perpId, traderAddress, limitPrice, triggerPrice, digest) => {
                 let order = await driverLOB.orderOfDigest(digest);
-                orderbook = addOrderToOrderbook(order, orderbook);
+                orderbook = addOrderToOrderbook(order, orderbook, digest);
+                console.log(`Got new order: `, order, orderbook)
             }
         );
     });
@@ -249,17 +253,30 @@ async function initializeRelayer(signingLOBs) {
         }
 
         lastDigest = digestsBatch[digestsBatch.length - 1];
-        result = result.concat(ordersBatch.map((o, idx) => orderToOrderTS(o, digestsBatch[idx])));
+        let idx = 0;
+        for(const o of ordersBatch){
+            result.push(orderToOrderTS(o, digestsBatch[idx]));
+            originalOrders[digestsBatch[idx]] = o;
+            idx++;
+        }
+        result = result.concat(ordersBatch.map((o, idx) => orderToOrderTS(o, digestsBatch[idx])));        
     } while (ordersBatch.length === batchSize);
     let numOrders = await driverLOB.orderCount();
-    numOrders = parseInt(numOrders);
+
+    numOrders = numOrders.toNumber();
     if (numOrders !== result.length) {
         const msg = `The orderCount (${numOrders}) is different than the actual orders returned (${ordersBatch.length})`;
         console.error(msg);
         throw new Error(msg);
     }
-    orderbook = sortOrderbook(orderbook);
-    console.log(`==========orderbook`, orderbook);
+    result = result.filter(o => o.iDeadline > Math.floor(new Date().getTime() / 1000));
+    orderbook = sortOrderbook(result);
+    for(const order of orderbook){
+        if(!perpIds.includes(order.iPerpetualId)){
+            perpIds.push(order.iPerpetualId);
+        }
+        unlockOrder(order.digest, true);
+    }
     return orderbook;
 }
 

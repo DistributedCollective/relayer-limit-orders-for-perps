@@ -30,7 +30,7 @@ type Order = {
   iPerpetualId: BytesLike;
   traderAddr: string;
   fAmount: BigNumberish;
-  fLimitPrice: number;
+  fLimitPrice: BigNumberish;
   fTriggerPrice: BigNumberish;
   iDeadline: BigNumberish;
   referrerAddr: string;
@@ -77,18 +77,20 @@ export async function getPerpetualIds(manager): Promise<any[] | undefined> {
   }
 }
 
-export function addOrderToOrderbook(order, orderbook) {
+export function addOrderToOrderbook(order: OrderTS, orderbook: OrderTS[], digest): OrderTS[] {
+  order = orderToOrderTS(order, digest);
   orderbook.push(order);
   return sortOrderbook(orderbook);
 }
 
-export function sortOrderbook(orderbook: Order[] = []) {
+export function sortOrderbook(orderbook: OrderTS[] = []) {
+  //sorting by trigger price, then by limit price
   let asks = orderbook
     .filter((o) => o.fAmount < 0)
-    .sort((a, b) => b.fLimitPrice - a.fLimitPrice);
+    .sort((a, b) => b.fTriggerPrice - a.fTriggerPrice || b.fLimitPrice - a.fLimitPrice);
   let bids = orderbook
     .filter((o) => o.fAmount > 0)
-    .sort((a, b) => a.fLimitPrice - b.fLimitPrice);
+    .sort((a, b) => a.fTriggerPrice || b.fTriggerPrice || a.fLimitPrice - b.fLimitPrice);
   return asks.concat(bids);
 }
 
@@ -138,7 +140,7 @@ export function orderToOrderTS(order: Order, digest: string): OrderTS {
     iPerpetualId: order.iPerpetualId.toString(),
     traderAddr: order.traderAddr,
     fAmount: ABK64x64ToFloat(order.fAmount as BN),
-    fLimitPrice: order.fLimitPrice,
+    fLimitPrice: ABK64x64ToFloat(order.fLimitPrice as BN),
     fTriggerPrice: ABK64x64ToFloat(order.fTriggerPrice as BN),
     iDeadline: (order.iDeadline as BN).toNumber(),
     referrerAddr: order.referrerAddr,
@@ -200,7 +202,7 @@ export async function executeOrders(signingLoBs, ordersTS: OrderTS[]) {
     let signingLoB = signingLoBs[i % batchSize];
     /////////
     execOrdersPromises.push(signingLoB
-      .executeLimitOrder(order)
+      .executeLimitOrder(order, {gasLimit: 3_000_000})
       .then(tx => tx) //tx is in mempool
       .then(settledTx => res[orderTS.digest] = { status: 'SUCCESS', result: settledTx })
       .catch(e => res[orderTS.digest] = { status: 'FAILED', result: e })
