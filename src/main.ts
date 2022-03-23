@@ -28,6 +28,7 @@ import {
     getMatchingOrders,
     executeOrders,
     unlockOrder,
+    Order,
 } from './utilFunctions';
 const { getSigningContractInstance } = walletUtils;
 import TelegramNotifier from './notifier/TelegramNotifier';
@@ -170,10 +171,12 @@ function runForNumBlocksManager<T>(
                 for (const perpId of perpIds) {
                     let ammData = await queryAMMState(driverManager, perpId);
                     let markPrice = getMarkPrice(ammData);
-                    let tradeableOrders = getMatchingOrders(orderbook, markPrice).map( o => originalOrders[o.digest]);
+                    let tradeableOrders = getMatchingOrders(orderbook, markPrice);
                     if (tradeableOrders.length) {
-                        let res = await executeOrders(signingLoBs, tradeableOrders);
-                        console.log(`----------relayed orders`, res);
+                        let res = await executeOrders(signingLoBs, tradeableOrders, orderbook, originalOrders);
+                        if(Object.keys(res).length){
+                            console.log(`----------relayed orders`, res);
+                        }
                     }
                 }
                 let timeEnd = new Date().getTime();
@@ -223,7 +226,7 @@ function runForNumBlocksLimitOrder<T>(
             'PerpetualLimitOrderCreated',
             async (perpId, traderAddress, limitPrice, triggerPrice, digest) => {
                 let order = await driverLOB.orderOfDigest(digest);
-                orderbook = addOrderToOrderbook(order, orderbook, digest);
+                orderbook = addOrderToOrderbook(order as Order, orderbook, digest, originalOrders);
                 console.log(`Got new order: `, order, orderbook)
             }
         );
@@ -254,25 +257,26 @@ async function initializeRelayer(signingLOBs) {
 
         lastDigest = digestsBatch[digestsBatch.length - 1];
         let idx = 0;
-        for(const o of ordersBatch){
+        for (const o of ordersBatch) {
             result.push(orderToOrderTS(o, digestsBatch[idx]));
-            originalOrders[digestsBatch[idx]] = o;
+            if (o.iDeadline > Math.floor(new Date().getTime() / 1000)) {
+                originalOrders[digestsBatch[idx]] = o;
+            }
             idx++;
         }
-        result = result.concat(ordersBatch.map((o, idx) => orderToOrderTS(o, digestsBatch[idx])));        
     } while (ordersBatch.length === batchSize);
     let numOrders = await driverLOB.orderCount();
 
-    numOrders = numOrders.toNumber();
+    numOrders = parseInt(numOrders.toNumber());
     if (numOrders !== result.length) {
-        const msg = `The orderCount (${numOrders}) is different than the actual orders returned (${ordersBatch.length})`;
+        const msg = `The orderCount (${numOrders}) is different than the actual orders returned (${result.length})`;
         console.error(msg);
         throw new Error(msg);
     }
     result = result.filter(o => o.iDeadline > Math.floor(new Date().getTime() / 1000));
     orderbook = sortOrderbook(result);
-    for(const order of orderbook){
-        if(!perpIds.includes(order.iPerpetualId)){
+    for (const order of orderbook) {
+        if (!perpIds.includes(order.iPerpetualId)) {
             perpIds.push(order.iPerpetualId);
         }
         unlockOrder(order.digest, true);

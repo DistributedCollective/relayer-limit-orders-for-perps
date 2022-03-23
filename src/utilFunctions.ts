@@ -26,7 +26,7 @@ export type OrderTS = {
   digest: string;
 };
 
-type Order = {
+export type Order = {
   iPerpetualId: BytesLike;
   traderAddr: string;
   fAmount: BigNumberish;
@@ -77,10 +77,25 @@ export async function getPerpetualIds(manager): Promise<any[] | undefined> {
   }
 }
 
-export function addOrderToOrderbook(order: OrderTS, orderbook: OrderTS[], digest): OrderTS[] {
-  order = orderToOrderTS(order, digest);
-  orderbook.push(order);
+export function addOrderToOrderbook(order: Order, orderbook: OrderTS[], digest, originalOrders): OrderTS[] {
+  let orderTS = orderToOrderTS(order, digest);
+  if (orderTS.iDeadline <= Math.floor(new Date().getTime() / 1000)){
+    return orderbook;
+  }
+  originalOrders[digest] = order;
+  orderbook.push(orderTS);
   return sortOrderbook(orderbook);
+}
+
+export function removeOrderFromOrderbook(order: OrderTS, orderbook: OrderTS[], originalOrders): OrderTS[] {
+  
+  delete originalOrders[order.digest];
+  let idxOrder = orderbook.findIndex(o => o.digest === order.digest);
+  if(idxOrder !== -1){
+    orderbook.splice(idxOrder, 1);
+  }
+
+  return orderbook;
 }
 
 export function sortOrderbook(orderbook: OrderTS[] = []) {
@@ -189,7 +204,7 @@ function orderTradeable(order: Order, markPrice: number): Boolean {
   return false;
 }
 
-export async function executeOrders(signingLoBs, ordersTS: OrderTS[]) {
+export async function executeOrders(signingLoBs, ordersTS: OrderTS[], orderbook: OrderTS[], originalOrders) {
   let execOrdersPromises = Array();
   let i = 0;
   let batchSize = signingLoBs.length;
@@ -197,16 +212,25 @@ export async function executeOrders(signingLoBs, ordersTS: OrderTS[]) {
 
   for (let orderTS of ordersTS) {
     if (isOrderLocked(orderTS.digest)) continue;
-    let order = orderTSToOrder(orderTS);
+    let order = originalOrders[orderTS.digest];
+    if(!order){
+      console.log(`Could not find order ${orderTS.digest} within the originalOrders: `, originalOrders);
+      continue;
+    };
     lockOrder(orderTS.digest);
     let signingLoB = signingLoBs[i % batchSize];
     /////////
     execOrdersPromises.push(signingLoB
       .executeLimitOrder(order, {gasLimit: 3_000_000})
-      .then(tx => tx) //tx is in mempool
-      .then(settledTx => res[orderTS.digest] = { status: 'SUCCESS', result: settledTx })
+      .then(tx => tx.wait()) //tx is in mempool
+      .then(settledTx => {
+        res[orderTS.digest] = { status: 'SUCCESS', result: settledTx };
+        removeOrderFromOrderbook(orderTS, orderbook, originalOrders);
+        setTimeout(() => unlockOrder(orderTS.digest), 15_000);
+      })
       .catch(e => res[orderTS.digest] = { status: 'FAILED', result: e })
-      .finally(() => setTimeout(() => unlockOrder(orderTS.digest), 15_000))
+      // .finally(() => {
+      // })
     );
     if (execOrdersPromises.length === batchSize) {
       await Promise.all(execOrdersPromises);
