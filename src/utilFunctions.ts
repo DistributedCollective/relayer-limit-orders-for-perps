@@ -1,11 +1,10 @@
-import { walletUtils, perpQueries, perpUtils } from '@sovryn/perpetual-swap';
+import { walletUtils, perpUtils, PerpParameters, AMMState } from '@sovryn/perpetual-swap';
 import { perpMath } from '@sovryn/perpetual-swap';
-import { ABK64x64ToFloat } from '@sovryn/perpetual-swap/dist/scripts/utils/perpMath';
 import { Contract, BigNumber as BN, BigNumberish, BytesLike, } from "ethers";
 const ethers = require('ethers');
-const { floatToABK64x64 } = perpMath;
-const { createSignature } = perpUtils;
-const { getSigningManagersConnectedToRandomNode, getNumTransactions } =
+const { floatToABK64x64, ABK64x64ToFloat } = perpMath;
+const { createSignature, getPrice, getMarkPrice } = perpUtils;
+const { getNumTransactions } =
   walletUtils;
 const fetch = require('node-fetch');
 const ONE_64x64 = BN.from("0x010000000000000000");
@@ -187,24 +186,24 @@ export function orderTSToOrder(order: OrderTS): Order {
   return res;
 }
 
-export function getMatchingOrders(orderbook: OrderTS[], markPrice: number): OrderTS[] {
+export function getMatchingOrders(orderbook: OrderTS[], perpParams: PerpParameters, ammData: AMMState): OrderTS[] {
 
-  return orderbook.filter(o => orderTradeable(o, markPrice))
+  return orderbook.filter(o => orderTradeable(o, perpParams, ammData))
 }
 
-function orderTradeable(order: Order, markPrice: number): Boolean {
-
-  let orderPrice = 100; /*....*/
+function orderTradeable(order: OrderTS, perpParams, ammData): Boolean {
+  let markPrice = getMarkPrice(ammData);
+  let orderPrice = getPrice(order.fAmount, perpParams, ammData);
 
   // Buy orders
   if (order.fAmount > 0) {
-    if (order.fTriggerPrice && markPrice <= order.fTriggerPrice && orderPrice <= order.fLimitPrice) return true; //stop loss order
+    if (order.fTriggerPrice && markPrice >= order.fTriggerPrice && orderPrice <= order.fLimitPrice) return true; //stop loss order
     if (!order.fTriggerPrice && orderPrice <= order.fLimitPrice) return true;
     return false;
   }
 
   //Sell orders
-  if (order.fTriggerPrice && markPrice >= order.fTriggerPrice && orderPrice >= order.fLimitPrice) return true; //stop loss order
+  if (order.fTriggerPrice && markPrice <= order.fTriggerPrice && orderPrice >= order.fLimitPrice) return true; //stop loss order
   if (!order.fTriggerPrice && orderPrice >= order.fLimitPrice) return true;
   return false;
 }

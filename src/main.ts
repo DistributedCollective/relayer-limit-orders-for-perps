@@ -171,11 +171,12 @@ function runForNumBlocksManager<T>(
                 let timeStart = new Date().getTime();
 
                 for (const perpId of perpIds) {
-                    let ammData = await queryAMMState(driverManager, perpId);
-                    let markPrice = getMarkPrice(ammData);
+                    let [ammData, perpParams] = await Promise.all([
+                        queryAMMState(driverManager, perpId),
+                        queryPerpParameters(driverManager, perpId)
+                    ]);
                     
-                    let tradeableOrders = getMatchingOrders(orderbook, markPrice); // works for stop orders
-                    //TODO include the slippage when looking for matching limit orders
+                    let tradeableOrders = getMatchingOrders(orderbook, perpParams, ammData); // works for stop orders
                     if (tradeableOrders.length) {
                         let res = await executeOrders(signingLoBs, tradeableOrders, orderbook, originalOrders);
                         if(Object.keys(res).length){
