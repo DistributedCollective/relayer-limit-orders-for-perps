@@ -29,6 +29,8 @@ import {
     executeOrders,
     unlockOrder,
     Order,
+    removeOrderFromOrderbook,
+    removeOrderFromOrderbookByDigest,
 } from './utilFunctions';
 const { getSigningContractInstance } = walletUtils;
 import TelegramNotifier from './notifier/TelegramNotifier';
@@ -171,7 +173,9 @@ function runForNumBlocksManager<T>(
                 for (const perpId of perpIds) {
                     let ammData = await queryAMMState(driverManager, perpId);
                     let markPrice = getMarkPrice(ammData);
-                    let tradeableOrders = getMatchingOrders(orderbook, markPrice);
+                    
+                    let tradeableOrders = getMatchingOrders(orderbook, markPrice); // works for stop orders
+                    //TODO include the slippage when looking for matching limit orders
                     if (tradeableOrders.length) {
                         let res = await executeOrders(signingLoBs, tradeableOrders, orderbook, originalOrders);
                         if(Object.keys(res).length){
@@ -202,6 +206,26 @@ function runForNumBlocksManager<T>(
                 return reject(error);
             }
         });
+
+        driverManager.on('Trade', (perpId,  traderAddr, positionId, digest, orderFlags, fTradeAmountBC, fNewPos, fPrice, fLimitPrice) => {
+            try {
+
+                orderbook = removeOrderFromOrderbookByDigest(digest, orderbook, originalOrders);
+                return;                
+
+            } catch (error) {
+                console.log(`Error in the Trade event handler`, error);
+            }
+
+        });
+
+        driverManager.on('PerpetualLimitOrderCancelled', (digest) => {
+            try {
+                orderbook = removeOrderFromOrderbookByDigest(digest, orderbook, originalOrders);
+            } catch (error) {
+                console.log(`Error in the PerpetualLimitOrderCancelled event handler`, error)
+            }
+        })
     });
 }
 

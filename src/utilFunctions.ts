@@ -88,9 +88,12 @@ export function addOrderToOrderbook(order: Order, orderbook: OrderTS[], digest, 
 }
 
 export function removeOrderFromOrderbook(order: OrderTS, orderbook: OrderTS[], originalOrders): OrderTS[] {
-  
-  delete originalOrders[order.digest];
-  let idxOrder = orderbook.findIndex(o => o.digest === order.digest);
+  return removeOrderFromOrderbookByDigest(order.digest, orderbook, originalOrders);
+}
+
+export function removeOrderFromOrderbookByDigest(digest, orderbook: OrderTS[], originalOrders): OrderTS[]{
+  delete originalOrders[digest];
+  let idxOrder = orderbook.findIndex(o => o.digest === digest);
   if(idxOrder !== -1){
     orderbook.splice(idxOrder, 1);
   }
@@ -191,16 +194,18 @@ export function getMatchingOrders(orderbook: OrderTS[], markPrice: number): Orde
 
 function orderTradeable(order: Order, markPrice: number): Boolean {
 
+  let orderPrice = 100; /*....*/
+
   // Buy orders
   if (order.fAmount > 0) {
-    if (order.fTriggerPrice && markPrice <= order.fTriggerPrice) return true; //stop loss order
-    if (!order.fTriggerPrice && markPrice <= order.fLimitPrice) return true;
+    if (order.fTriggerPrice && markPrice <= order.fTriggerPrice && orderPrice <= order.fLimitPrice) return true; //stop loss order
+    if (!order.fTriggerPrice && orderPrice <= order.fLimitPrice) return true;
     return false;
   }
 
   //Sell orders
-  if (order.fTriggerPrice && markPrice >= order.fTriggerPrice) return true; //stop loss order
-  if (!order.fTriggerPrice && markPrice >= order.fLimitPrice) return true;
+  if (order.fTriggerPrice && markPrice >= order.fTriggerPrice && orderPrice >= order.fLimitPrice) return true; //stop loss order
+  if (!order.fTriggerPrice && orderPrice >= order.fLimitPrice) return true;
   return false;
 }
 
