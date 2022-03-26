@@ -14,6 +14,8 @@ const {
     TELEGRAM_CHANNEL_ID,
 } = process.env;
 
+let maxBlocksBeforeReconnect = parseInt(MAX_BLOCKS_BEFORE_RECONNECT || '180');
+
 if (!MNEMONIC) {
     console.log(`ERROR: Mnemonic is not present.`);
     process.exit(1);
@@ -90,15 +92,15 @@ let notifier = getTelegramNotifier(TELEGRAM_BOT_SECRET, TELEGRAM_CHANNEL_ID);
                     runForNumBlocksLimitOrder(
                         driverLOB,
                         signingLOBs,
-                        MAX_BLOCKS_BEFORE_RECONNECT
+                        maxBlocksBeforeReconnect
                     ),
                     runForNumBlocksManager(
                         driverManager,
                         signingLOBs,
-                        MAX_BLOCKS_BEFORE_RECONNECT
+                        maxBlocksBeforeReconnect
                     ),
                 ]);
-                console.log(`Ran for ${MAX_BLOCKS_BEFORE_RECONNECT}`);
+                console.log(`Ran for ${maxBlocksBeforeReconnect}`);
             } catch (error) {
                 console.log(`Error in while(true):`, error);
                 // await notifier.sendMessage(`Error in while(true): ${(error as any).message}`);
