@@ -151,6 +151,46 @@ export async function createLimitOrder(limitOrderBook: Contract, perpetualId, tr
   return tx1;
 }
 
+export async function createStopLossOrder(limitOrderBook: Contract, perpetualId, tradeAmount, triggerPrice, limitPrice, account, signer, managerAddr: string, deadline, createdTimestamp, referrer = ZERO_ADDRESS, leverage = null, executeOrder = false) {
+
+  if (createdTimestamp == null) {
+    createdTimestamp = Math.round(new Date().getTime() / 1000);
+  }
+
+  if (deadline == null) {
+    deadline = createdTimestamp + 86400;
+  }
+
+  if (leverage == null) {
+    leverage = floatToABK64x64(0);
+  }
+
+  let order: Order = {
+    iPerpetualId: perpetualId,
+    traderAddr: account,
+    fAmount: floatToABK64x64(tradeAmount).toString(),
+    fLimitPrice: floatToABK64x64(limitPrice).toString() as any,
+    fTriggerPrice: floatToABK64x64(triggerPrice).toString() as any,
+    iDeadline: deadline,
+    referrerAddr: referrer,
+    flags: MASK_STOP_ORDER.toNumber(),
+    fLeverage: leverage.toString(),
+    createdTimestamp: createdTimestamp,
+  };
+  let chainId = (await limitOrderBook.provider.getNetwork()).chainId;
+  let signature = await createSignature(order, true, signer, managerAddr, chainId);
+
+  let tx1 = await limitOrderBook.createLimitOrder(order, signature, { gasLimit: 3_000_000 });
+
+  tx1 = await tx1.wait();
+  console.log(`---------order created in orderbook`, tx1);
+
+
+  // tx1 = await limitOrderBook.executeLimitOrder(order, { gasLimit: 3_000_000 });
+
+  return tx1;
+}
+
 export function orderToOrderTS(order: Order, digest: string): OrderTS {
 
   let res: OrderTS = {
@@ -194,6 +234,8 @@ export function getMatchingOrders(orderbook: OrderTS[], perpParams: PerpParamete
 function orderTradeable(order: OrderTS, perpParams, ammData): Boolean {
   let markPrice = getMarkPrice(ammData);
   let orderPrice = getPrice(order.fAmount, perpParams, ammData);
+
+  console.log(`triggerPrice: ${order.fTriggerPrice}, markPrice: ${markPrice}, orderPrice: ${orderPrice}, limitPrice: ${order.fLimitPrice}`);
 
   // Buy orders
   if (order.fAmount > 0) {
