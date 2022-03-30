@@ -235,7 +235,9 @@ function orderTradeable(order: OrderTS, perpParams, ammData): Boolean {
   let markPrice = getMarkPrice(ammData);
   let orderPrice = getPrice(order.fAmount, perpParams, ammData);
 
-  console.log(`triggerPrice: ${order.fTriggerPrice}, markPrice: ${markPrice}, orderPrice: ${orderPrice}, limitPrice: ${order.fLimitPrice}`);
+  if(!isOrderLocked(order.digest)){
+    console.log(`triggerPrice: ${order.fTriggerPrice}, markPrice: ${markPrice}, orderPrice: ${orderPrice}, limitPrice: ${order.fLimitPrice}`);
+  }
 
   // Buy orders
   if (order.fAmount > 0) {
@@ -248,6 +250,10 @@ function orderTradeable(order: OrderTS, perpParams, ammData): Boolean {
   if (order.fTriggerPrice && markPrice <= order.fTriggerPrice && orderPrice >= order.fLimitPrice) return true; //stop loss order
   if (!order.fTriggerPrice && orderPrice >= order.fLimitPrice) return true;
   return false;
+}
+
+export function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 export async function executeOrders(signingLoBs, ordersTS: OrderTS[], orderbook: OrderTS[], originalOrders) {

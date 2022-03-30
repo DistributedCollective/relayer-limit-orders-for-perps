@@ -33,6 +33,7 @@ import {
     Order,
     removeOrderFromOrderbook,
     removeOrderFromOrderbookByDigest,
+    sleep,
 } from './utilFunctions';
 const { getSigningContractInstance } = walletUtils;
 import TelegramNotifier from './notifier/TelegramNotifier';
@@ -134,7 +135,7 @@ let notifier = getTelegramNotifier(TELEGRAM_BOT_SECRET, TELEGRAM_CHANNEL_ID);
             error
         );
         await notifier.sendMessage(
-            `[RELAYER] General error while liquidating users: ${(error as any).message
+            `[RELAYER] General error while relaying orders: ${(error as any).message
             }. Exiting.`
         );
         process.exit(1);
@@ -204,8 +205,10 @@ function runForNumBlocksManager<T>(
                 console.log(`Error in block processing callback:`, error);
                 blockProcessingErrors++;
                 if (blockProcessingErrors >= 5) {
+                    blockProcessingErrors = 0;
                     await notifier.sendMessage(`Error in block processing callback ${(error as Error).message}`);
                 }
+                await sleep(3_000);
                 return reject(error);
             }
         });
