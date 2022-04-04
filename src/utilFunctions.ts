@@ -235,9 +235,9 @@ function orderTradeable(order: OrderTS, perpParams, ammData): Boolean {
   let markPrice = getMarkPrice(ammData);
   let orderPrice = getPrice(order.fAmount, perpParams, ammData);
 
-  if(!isOrderLocked(order.digest)){
-    console.log(`triggerPrice: ${order.fTriggerPrice}, markPrice: ${markPrice}, orderPrice: ${orderPrice}, limitPrice: ${order.fLimitPrice}`);
-  }
+  // if(!isOrderLocked(order.digest)){
+  //   console.log(`triggerPrice: ${order.fTriggerPrice}, markPrice: ${markPrice}, orderPrice: ${orderPrice}, limitPrice: ${order.fLimitPrice}`);
+  // }
 
   // Buy orders
   if (order.fAmount > 0) {

@@ -13,6 +13,11 @@ const {
     TELEGRAM_BOT_SECRET,
     TELEGRAM_CHANNEL_ID,
 } = process.env;
+let bscNodeURLs = JSON.parse(NODE_URLS || '[]');
+
+console.log(
+    `Manager address ${MANAGER_ADDRESS}, OrderBook address ${ORDER_BOOK_ADDRESS}`
+);
 
 let maxBlocksBeforeReconnect = parseInt(MAX_BLOCKS_BEFORE_RECONNECT || '180');
 
@@ -33,9 +38,9 @@ import {
     Order,
     removeOrderFromOrderbook,
     removeOrderFromOrderbookByDigest,
-    sleep,
+    getPerpetualIds,
 } from './utilFunctions';
-const { getSigningContractInstance } = walletUtils;
+const { getSigningContractInstance, getReadOnlyContractInstance } = walletUtils;
 import TelegramNotifier from './notifier/TelegramNotifier';
 import { v4 as uuidv4 } from 'uuid';
 import { getMarkPrice } from '@sovryn/perpetual-swap/dist/scripts/utils/perpUtils';
@@ -52,25 +57,20 @@ let notifier = getTelegramNotifier(TELEGRAM_BOT_SECRET, TELEGRAM_CHANNEL_ID);
 
 (async function main() {
     try {
-        let [[driverLOB, ...signingLOBs], [driverManager, ...signingManagers]] =
-            await Promise.all([
-                getConnectedAndFundedSigners(
-                    'LimitOrderBook',
-                    ORDER_BOOK_ADDRESS,
-                    0,
-                    11,
-                    true
-                ),
-                getConnectedAndFundedSigners(
-                    'IPerpetualManager',
-                    MANAGER_ADDRESS,
-                    0,
-                    11,
-                    true
-                ),
-            ]);
+        let [driverLOB, ...signingLOBs] = await getConnectedAndFundedSigners(
+            'LimitOrderBook',
+            ORDER_BOOK_ADDRESS,
+            0,
+            3,
+            true
+        );
+        let driverManager = getReadOnlyContractInstance(MANAGER_ADDRESS, bscNodeURLs, 'IPerpetualManager');
 
-        orderbook = await initializeRelayer(signingLOBs);
+        console.log(
+            `LimitOrder connected to node ${driverLOB.provider.connection.url}\nManager connected to ${driverManager.provider.connection.url}`
+        );
+
+        orderbook = await initializeRelayer(signingLOBs, driverManager);
 
         if (process.env.HEARTBEAT_SHOULD_RESTART_URL) {
             let intervalId = setInterval(
@@ -111,23 +111,18 @@ let notifier = getTelegramNotifier(TELEGRAM_BOT_SECRET, TELEGRAM_CHANNEL_ID);
             driverLOB.provider.removeAllListeners();
             driverLOB.removeAllListeners();
 
-            [[driverLOB, ...signingLOBs], [driverManager, ...signingManagers]] =
-                await Promise.all([
-                    getConnectedAndFundedSigners(
-                        'LimitOrderBook',
-                        ORDER_BOOK_ADDRESS,
-                        0,
-                        11,
-                        true
-                    ),
-                    getConnectedAndFundedSigners(
-                        'IPerpetualManager',
-                        ORDER_BOOK_ADDRESS,
-                        0,
-                        11,
-                        true
-                    ),
-                ]);
+            [driverLOB, ...signingLOBs] = await getConnectedAndFundedSigners(
+                'LimitOrderBook',
+                ORDER_BOOK_ADDRESS,
+                0,
+                3,
+                true
+            );
+            driverManager = getReadOnlyContractInstance(MANAGER_ADDRESS, bscNodeURLs, 'IPerpetualManager');
+            console.log(
+                `LimitOrder connected to node ${driverLOB.provider.connection.url}\nManager connected to ${driverManager.provider.connection.url}`
+            );
+            orderbook = await initializeRelayer(driverLOB, driverManager);
         }
     } catch (error) {
         console.log(
@@ -135,7 +130,8 @@ let notifier = getTelegramNotifier(TELEGRAM_BOT_SECRET, TELEGRAM_CHANNEL_ID);
             error
         );
         await notifier.sendMessage(
-            `[RELAYER] General error while relaying orders: ${(error as any).message
+            `[RELAYER] General error while relaying orders: ${
+                (error as any).message
             }. Exiting.`
         );
         process.exit(1);
@@ -161,77 +157,131 @@ function runForNumBlocksManager<T>(
             reject(e);
         });
 
-        /**
-         * TODO:
-         * - get price,
-         * - search for matching orders,
-         * - call executeLimitOrder
-         */
-
         let numBlocks = 0;
+        let blockProcessing = 0;
         driverManager.provider.on('block', async (blockNumber) => {
             try {
+                if(blockProcessing){
+                    if(blockNumber - blockProcessing > 5){
+                        console.log(`Skip processing block ${blockNumber} because block ${blockProcessing} is still being processed`);
+                    }
+                    if(blockNumber - blockProcessing > 20){
+                        let msg = `Block processing is falling behind. Block being processed is ${blockProcessing}, while current blockNumber is ${blockNumber}`;
+                        console.warn(msg);
+                        await notifier.sendMessage(msg);
+                        return reject(msg);
+                    }
+                    return;
+                }
+                blockProcessing = blockNumber;
                 let timeStart = new Date().getTime();
 
                 for (const perpId of perpIds) {
                     let [ammData, perpParams] = await Promise.all([
                         queryAMMState(driverManager, perpId),
-                        queryPerpParameters(driverManager, perpId)
+                        queryPerpParameters(driverManager, perpId),
                     ]);
-                    
-                    let tradeableOrders = getMatchingOrders(orderbook, perpParams, ammData); // works for stop orders
+
+                    let tradeableOrders = getMatchingOrders(
+                        orderbook,
+                        perpParams,
+                        ammData
+                    ); 
                     if (tradeableOrders.length) {
-                        let res = await executeOrders(signingLoBs, tradeableOrders, orderbook, originalOrders);
-                        if(Object.keys(res).length){
-                            console.log(`----------relayed orders`, res);
+                        blockProcessing = 0;
+                        let res = await executeOrders(
+                            signingLoBs,
+                            tradeableOrders,
+                            orderbook,
+                            originalOrders
+                        );
+                        if (Object.keys(res).length) {
+                            console.log(`relayed orders`, res);
                         }
                     }
                 }
                 let timeEnd = new Date().getTime();
                 if (numBlocks % 50 === 0) {
-                    console.log(`[${new Date()} (${timeEnd - timeStart} ms) block: ${blockNumber}] numBlocks ${numBlocks} active orders ${orderbook.length}`);
+                    console.log(
+                        `[${new Date()} (${
+                            timeEnd - timeStart
+                        } ms) block: ${blockNumber}] numBlocks ${numBlocks} active orders ${
+                            orderbook.length
+                        }`
+                    );
                 }
-                await sendHeartBeat("LIQ_BLOCK_PROCESSED", {
-                    blockNumber,
-                    runId,
-                    duration: timeEnd - timeStart,
-                }, notifier);
+                await sendHeartBeat(
+                    'RELAYER_BLOCK_PROCESSED',
+                    {
+                        blockNumber,
+                        runId,
+                        duration: timeEnd - timeStart,
+                    },
+                    notifier
+                );
                 blockProcessingErrors = 0;
+                blockProcessing = 0;
                 numBlocks++;
                 if (numBlocks >= maxBlocks) {
+                    numBlocks = 0;
                     return resolve();
                 }
             } catch (error) {
+                blockProcessing = 0;
                 console.log(`Error in block processing callback:`, error);
                 blockProcessingErrors++;
                 if (blockProcessingErrors >= 5) {
                     blockProcessingErrors = 0;
-                    await notifier.sendMessage(`Error in block processing callback ${(error as Error).message}`);
+                    await notifier.sendMessage(
+                        `Error in block processing callback ${
+                            (error as Error).message
+                        }`
+                    );
                 }
-                await sleep(3_000);
                 return reject(error);
             }
         });
 
-        driverManager.on('Trade', (perpId,  traderAddr, positionId, digest, orderFlags, fTradeAmountBC, fNewPos, fPrice, fLimitPrice) => {
-            try {
-
-                orderbook = removeOrderFromOrderbookByDigest(digest, orderbook, originalOrders);
-                return;                
-
-            } catch (error) {
-                console.log(`Error in the Trade event handler`, error);
+        driverManager.on(
+            'Trade',
+            (
+                perpId,
+                traderAddr,
+                positionId,
+                digest,
+                orderFlags,
+                fTradeAmountBC,
+                fNewPos,
+                fPrice,
+                fLimitPrice
+            ) => {
+                try {
+                    orderbook = removeOrderFromOrderbookByDigest(
+                        digest,
+                        orderbook,
+                        originalOrders
+                    );
+                    return;
+                } catch (error) {
+                    console.log(`Error in the Trade event handler`, error);
+                }
             }
-
-        });
+        );
 
         driverManager.on('PerpetualLimitOrderCancelled', (digest) => {
             try {
-                orderbook = removeOrderFromOrderbookByDigest(digest, orderbook, originalOrders);
+                orderbook = removeOrderFromOrderbookByDigest(
+                    digest,
+                    orderbook,
+                    originalOrders
+                );
             } catch (error) {
-                console.log(`Error in the PerpetualLimitOrderCancelled event handler`, error)
+                console.log(
+                    `Error in the PerpetualLimitOrderCancelled event handler`,
+                    error
+                );
             }
-        })
+        });
     });
 }
 
@@ -256,21 +306,28 @@ function runForNumBlocksLimitOrder<T>(
             'PerpetualLimitOrderCreated',
             async (perpId, traderAddress, limitPrice, triggerPrice, digest) => {
                 let order = await driverLOB.orderOfDigest(digest);
-                orderbook = addOrderToOrderbook(order as Order, orderbook, digest, originalOrders);
-                console.log(`Got new order: `, order, orderbook)
+                orderbook = addOrderToOrderbook(
+                    order as Order,
+                    orderbook,
+                    digest,
+                    originalOrders
+                );
+                console.log(`Got new order: `, order, orderbook);
             }
         );
     });
 }
 
-async function initializeRelayer(signingLOBs) {
+async function initializeRelayer(signingLOBs, driverManager) {
     let driverLOB = signingLOBs[0];
     //the 0x0 value for the firstDigest actually. We start from it and ask for orders in batches of batchSize
-    let lastDigest = '0x0000000000000000000000000000000000000000000000000000000000000000';
+    let lastDigest =
+        '0x0000000000000000000000000000000000000000000000000000000000000000';
     let batchSize = 100;
     let result = Array();
     let ordersBatch = Array();
     let digestsBatch = Array();
+    perpIds = await getPerpetualIds(driverManager);
     do {
         [ordersBatch, digestsBatch] = await driverLOB.pollLimitOrders(
             lastDigest,
@@ -303,12 +360,11 @@ async function initializeRelayer(signingLOBs) {
         console.error(msg);
         throw new Error(msg);
     }
-    result = result.filter(o => o.iDeadline > Math.floor(new Date().getTime() / 1000));
+    result = result.filter(
+        (o) => o.iDeadline > Math.floor(new Date().getTime() / 1000)
+    );
     orderbook = sortOrderbook(result);
     for (const order of orderbook) {
-        if (!perpIds.includes(order.iPerpetualId)) {
-            perpIds.push(order.iPerpetualId);
-        }
         unlockOrder(order.digest, true);
     }
     return orderbook;
@@ -359,7 +415,6 @@ async function getConnectedAndFundedSigners(
     numSigners,
     includeDriverManager = true
 ) {
-    let bscNodeURLs = JSON.parse(NODE_URLS || '[]');
     let signers = Array();
     let areRelayersFunded = Array();
     let numRetries = 0;
@@ -383,12 +438,16 @@ async function getConnectedAndFundedSigners(
 
             //get the number of Relayings each can make [{[relayerAddress]: numRelayings}]
             //this also checks whether the signingManagers are connected and the node responds properly
-            let gasAmount = abiName === 'IPerpetualManager' ? 1_000_000 : 4_000_000;
+            let gasAmount =
+                abiName === 'IPerpetualManager' ? 1_000_000 : 4_000_000;
             areRelayersFunded = await checkFundingHealth(signers, gasAmount);
             areRelayersFunded = areRelayersFunded.sort((a, b) => {
                 let [relayerAddrA, numRelayingsA] = Object.entries(a)[0];
                 let [relayerAddrB, numRelayingsB] = Object.entries(b)[0];
-                return parseInt(numRelayingsB as any) - parseInt(numRelayingsA as any);
+                return (
+                    parseInt(numRelayingsB as any) -
+                    parseInt(numRelayingsA as any)
+                );
             });
             for (let i = 0; i < areRelayersFunded.length; i++) {
                 let relayer = areRelayersFunded[i];
@@ -439,7 +498,8 @@ async function getConnectedAndFundedSigners(
 
     let timeEnd = new Date().getTime();
     console.log(
-        `(${timeEnd - timeStart
+        `(${
+            timeEnd - timeStart
         } ms) Funded wallets after ${numRetries} connection attempts:`,
         fundedWalletAddresses
     );
