@@ -56,15 +56,16 @@ console.log(`runId: ${runId}`);
 let notifier = getTelegramNotifier(TELEGRAM_BOT_SECRET, TELEGRAM_CHANNEL_ID);
 
 (async function main() {
+    let driverLOB, signingLOBs, driverManager;
     try {
-        let [driverLOB, ...signingLOBs] = await getConnectedAndFundedSigners(
+        [driverLOB, ...signingLOBs] = await getConnectedAndFundedSigners(
             'LimitOrderBook',
             ORDER_BOOK_ADDRESS,
             0,
             3,
             true
         );
-        let driverManager = getReadOnlyContractInstance(MANAGER_ADDRESS, bscNodeURLs, 'IPerpetualManager');
+        driverManager = getReadOnlyContractInstance(MANAGER_ADDRESS, bscNodeURLs, 'IPerpetualManager');
 
         console.log(
             `LimitOrder connected to node ${driverLOB.provider.connection.url}\nManager connected to ${driverManager.provider.connection.url}`
@@ -73,12 +74,8 @@ let notifier = getTelegramNotifier(TELEGRAM_BOT_SECRET, TELEGRAM_CHANNEL_ID);
         orderbook = await initializeRelayer(signingLOBs, driverManager);
 
         if (process.env.HEARTBEAT_SHOULD_RESTART_URL) {
-            let intervalId = setInterval(
-                () => shouldRestart(runId, 'RELAYER_ORDERBOOK_BLOCK_PROCESSED'),
-                5_000
-            );
             let intervalId2 = setInterval(
-                () => shouldRestart(runId, 'RELAYER_MANAGER_BLOCK_PROCESSED'),
+                () => shouldRestart(runId, 'RELAYER_BLOCK_PROCESSED'),
                 5_000
             );
         } else {
@@ -134,6 +131,8 @@ let notifier = getTelegramNotifier(TELEGRAM_BOT_SECRET, TELEGRAM_CHANNEL_ID);
                 (error as any).message
             }. Exiting.`
         );
+        driverLOB?.provider?.removeAllListeners();
+        driverLOB?.removeAllListeners();
         process.exit(1);
     }
 })();
