@@ -12,7 +12,7 @@ const { createSignature, getPrice, getMarkPrice } = perpUtils;
 const { getNumTransactions } = walletUtils;
 const fetch = require('node-fetch');
 const ONE_64x64 = BN.from('0x010000000000000000');
-import { readFileSync, unlinkSync, writeFileSync } from 'fs';
+import { readFileSync, unlinkSync, writeFileSync, existsSync } from 'fs';
 
 export type OrderTS = {
     iPerpetualId: string;
@@ -468,5 +468,42 @@ function getLockingFileName(orderDigest): string {
         '/order-' +
         orderDigest.toString().toLowerCase() +
         '.lock'
+    );
+}
+
+export function incrementFailures(failureName) {
+    const failureFileName = getFailureFileName(failureName);
+    try {
+        if (!existsSync(failureFileName)) {
+            writeFileSync(failureFileName, `0`);
+        }
+        let numFailures = getNumFailures(failureName);
+        numFailures++;
+
+        writeFileSync(failureFileName, numFailures.toString());
+    } catch (e) {
+        console.log(`Error in incrementFailures (${failureName}): `, e);
+    }
+    return false;
+}
+
+export function getNumFailures(failureName) {
+    const failureFileName = getFailureFileName(failureName);
+    const content = readFileSync(failureFileName).toString();
+    let numFailures = parseInt(content);
+    return numFailures;
+}
+
+export function resetFailures(failureName) {
+    const failureFileName = getFailureFileName(failureName);
+    writeFileSync(failureFileName, `0`);
+}
+
+function getFailureFileName(failureName) {
+    return (
+        (process.env.LOCKING_FOLDER || '/tmp') +
+        '/failure-' +
+        failureName.toString().toLowerCase() +
+        '.fails'
     );
 }

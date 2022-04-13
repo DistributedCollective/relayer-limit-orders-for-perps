@@ -21,6 +21,8 @@ console.log(
 
 let maxBlocksBeforeReconnect = parseInt(MAX_BLOCKS_BEFORE_RECONNECT || '180');
 
+let maxGeneralFailures = 10;
+
 if (!MNEMONIC) {
     console.log(`ERROR: Mnemonic is not present.`);
     process.exit(1);
@@ -39,6 +41,9 @@ import {
     removeOrderFromOrderbook,
     removeOrderFromOrderbookByDigest,
     getPerpetualIds,
+    incrementFailures,
+    getNumFailures,
+    resetFailures,
 } from './utilFunctions';
 const { getSigningContractInstance, getReadOnlyContractInstance } = walletUtils;
 import TelegramNotifier from './notifier/TelegramNotifier';
@@ -120,20 +125,25 @@ let notifier = getTelegramNotifier(TELEGRAM_BOT_SECRET, TELEGRAM_CHANNEL_ID);
                 `LimitOrder connected to node ${driverLOB.provider.connection.url}\nManager connected to ${driverManager.provider.connection.url}`
             );
             orderbook = await initializeRelayer(driverLOB, driverManager);
+            resetFailures('GENERAL_ERROR');
         }
     } catch (error) {
         console.log(
             `[RELAYER] General error while relaying orders, exiting process`,
             error
         );
-        await notifier.sendMessage(
-            `[RELAYER] General error while relaying orders: ${
-                (error as any).message
-            }. Exiting.`
-        );
+        incrementFailures('GENERAL_ERROR');
+        const numFailures = getNumFailures('GENERAL_ERROR');
+        if(numFailures >= maxGeneralFailures){
+            await notifier.sendMessage(
+                `[RELAYER] General error while relaying orders: ${
+                    (error as any).message
+                }. Exiting.`
+            );
+        }
         driverLOB?.provider?.removeAllListeners();
         driverLOB?.removeAllListeners();
-        process.exit(1);
+        process.exit(0);
     }
 })();
 
