@@ -182,7 +182,7 @@ function runForNumBlocksManager<T>(
                             `Skip processing block ${blockNumber} because block ${blockProcessing} is still being processed`
                         );
                     }
-                    if (blockNumber - blockProcessing > 20) {
+                    if (blockNumber - blockProcessing > 100) {
                         let msg = `Block processing is falling behind. Block being processed is ${blockProcessing}, while current blockNumber is ${blockNumber}`;
                         console.warn(msg);
                         await notifier.sendMessage(msg);

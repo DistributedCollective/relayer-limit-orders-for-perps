@@ -1,9 +1,9 @@
 import {
-    walletUtils,
     perpUtils,
     PerpParameters,
     AMMState,
 } from '@sovryn/perpetual-swap';
+import * as walletUtils from '@sovryn/perpetual-swap/dist/scripts/utils/walletUtils';
 import { perpMath } from '@sovryn/perpetual-swap';
 import { Contract, BigNumber as BN, BigNumberish, BytesLike } from 'ethers';
 const ethers = require('ethers');
