@@ -2,7 +2,8 @@ const configFileName = process.argv?.[2] || '.env';
 const path = require('path');
 let configPath = path.resolve(__dirname, '../', configFileName);
 require('dotenv').config({ path: configPath });
-import { walletUtils, perpQueries, perpUtils } from '@sovryn/perpetual-swap';
+import { perpQueries } from '@sovryn/perpetual-swap';
+import * as walletUtils from '@sovryn/perpetual-swap/scripts/utils/walletUtils';
 
 const {
     MANAGER_ADDRESS,

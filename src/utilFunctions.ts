@@ -8,7 +8,7 @@ import { perpMath } from '@sovryn/perpetual-swap';
 import { Contract, BigNumber as BN, BigNumberish, BytesLike } from 'ethers';
 const ethers = require('ethers');
 const { floatToABK64x64, ABK64x64ToFloat } = perpMath;
-const { createSignature, getPrice, getMarkPrice } = perpUtils;
+const { getPrice, getMarkPrice, createOrderDigest } = perpUtils;
 const { getNumTransactions } = walletUtils;
 const fetch = require('node-fetch');
 const ONE_64x64 = BN.from('0x010000000000000000');
@@ -175,13 +175,14 @@ export async function createLimitOrder(
         createdTimestamp: createdTimestamp,
     };
     let chainId = (await limitOrderBook.provider.getNetwork()).chainId;
-    let signature = await createSignature(
+    let orderDigest = await createOrderDigest(
         order,
         true,
-        signer,
         managerAddr,
         chainId
     );
+
+    let signature = signer.signMessage(orderDigest);
 
     let tx1 = await limitOrderBook.createLimitOrder(order, signature, {
         gasLimit: 3_000_000,
@@ -235,13 +236,14 @@ export async function createStopLossOrder(
         createdTimestamp: createdTimestamp,
     };
     let chainId = (await limitOrderBook.provider.getNetwork()).chainId;
-    let signature = await createSignature(
+    let orderDigest = await createOrderDigest(
         order,
         true,
-        signer,
         managerAddr,
         chainId
     );
+
+    let signature = signer.signMessage(orderDigest);
 
     let tx1 = await limitOrderBook.createLimitOrder(order, signature, {
         gasLimit: 3_000_000,
