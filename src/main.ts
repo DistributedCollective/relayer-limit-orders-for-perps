@@ -3,7 +3,7 @@ const path = require('path');
 let configPath = path.resolve(__dirname, '../', configFileName);
 require('dotenv').config({ path: configPath });
 import { perpQueries } from '@sovryn/perpetual-swap';
-import * as walletUtils from '@sovryn/perpetual-swap/scripts/utils/walletUtils';
+import * as walletUtils from '@sovryn/perpetual-swap/dist/scripts/utils/walletUtils';
 
 const {
     MANAGER_ADDRESS,
