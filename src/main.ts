@@ -13,11 +13,14 @@ const {
     MAX_BLOCKS_BEFORE_RECONNECT,
     TELEGRAM_BOT_SECRET,
     TELEGRAM_CHANNEL_ID,
+    IDX_ADDR_START,
+    NUM_ADDRESSES,
+    PERP_NAME,
 } = process.env;
 let bscNodeURLs = JSON.parse(NODE_URLS || '[]');
 
 console.log(
-    `Manager address ${MANAGER_ADDRESS}, OrderBook address ${ORDER_BOOK_ADDRESS}`
+    `Perp name ${PERP_NAME}, Manager address ${MANAGER_ADDRESS}, OrderBook address ${ORDER_BOOK_ADDRESS}`
 );
 
 let maxBlocksBeforeReconnect = parseInt(MAX_BLOCKS_BEFORE_RECONNECT || '180');
@@ -67,8 +70,8 @@ let notifier = getTelegramNotifier(TELEGRAM_BOT_SECRET, TELEGRAM_CHANNEL_ID);
         [driverLOB, ...signingLOBs] = await getConnectedAndFundedSigners(
             'LimitOrderBook',
             ORDER_BOOK_ADDRESS,
-            0,
-            3,
+            parseInt(IDX_ADDR_START),
+            parseInt(NUM_ADDRESSES),
             true
         );
         driverManager = getReadOnlyContractInstance(
@@ -119,8 +122,8 @@ let notifier = getTelegramNotifier(TELEGRAM_BOT_SECRET, TELEGRAM_CHANNEL_ID);
             [driverLOB, ...signingLOBs] = await getConnectedAndFundedSigners(
                 'LimitOrderBook',
                 ORDER_BOOK_ADDRESS,
-                0,
-                3,
+                parseInt(IDX_ADDR_START),
+                parseInt(NUM_ADDRESSES),
                 true
             );
             driverManager = getReadOnlyContractInstance(
@@ -229,7 +232,7 @@ function runForNumBlocksManager<T>(
                     );
                 }
                 await sendHeartBeat(
-                    'RELAYER_BLOCK_PROCESSED',
+                    `RELAYER_${PERP_NAME || 'unknown'}_BLOCK_PROCESSED`,
                     {
                         blockNumber,
                         runId,

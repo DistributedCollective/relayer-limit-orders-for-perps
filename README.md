@@ -15,7 +15,12 @@ $ npm install -g ts-node
 Edit the .env file:
 
 
-Make sure the `MANAGER_ADDRESS`, `TOKEN_ADDRESS` and the `ORDER_BOOK_ADDRESS` point to the AMM that's currently in use, the rBTC ERC20 contract and the address of the running order book contract. The ones in the .env-sample should point to the correct ones.
+Make sure the `MANAGER_ADDRESS` and the `TOKEN_ADDRESS` point to the AMM that's currently in use, the rBTC ERC20 contract and the address of the running order book contract. The ones in the .env-sample should point to the correct ones.
+
+For now there are 2 perpetuals running: BTC/USD and BNB/USD. In order to have one relayer instance working for each of these, we have it configured as an app in the `ecosystem.config.js` file. There are a few other env variable which needs to be configured in the above file:
+- `ORDER_BOOK_ADDRESS` - the address where the orderbook for that perp is deployed
+- `IDX_START_ADDR` - the index of the start wallet generated using the `MNEMONIC` (ie: for `IDX_START_ADDR=3`, the derivation path of the starting wallet is `m/44'/60'/0'/0/3`)
+- `NUM_ADDRESSES` is the number of wallets that'll be used to relay orders concurrently. (ie: if `IDX_START_ADDR=3` and `NUM_ADDRESSES=3`, then the derivation path of the last wallet used will be `m/44'/60'/0'/0/5`)
 
 Configure `TELEGRAM_BOT_SECRET` and `TELEGRAM_CHANNEL_ID` with the correct credentials of a telegram bot ([here's how you can create your own](https://core.telegram.org/bots#3-how-do-i-create-a-bot)) so that the liquidator can send you notifications* if something goes wrong.
 
