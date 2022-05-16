@@ -17,7 +17,7 @@
   },
   "homepage": "https://github.com/DistributedCollective/relayer-limit-orders-for-perps#readme",
   "dependencies": {
-    "@sovryn/perpetual-swap": "^3.0.0",
+    "@sovryn/perpetual-swap": "^3.0.3",
     "dotenv": "^16.0.0",
     "node-fetch": "^2.6.7",
     "telegraf": "^4.7.0",

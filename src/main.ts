@@ -16,6 +16,7 @@ const {
     IDX_ADDR_START,
     NUM_ADDRESSES,
     PERP_NAME,
+    OWNER_ADDRESS,
 } = process.env;
 let bscNodeURLs = JSON.parse(NODE_URLS || '[]');
 
@@ -48,6 +49,7 @@ import {
     incrementFailures,
     getNumFailures,
     resetFailures,
+    isOrderFailed,
 } from './utilFunctions';
 const { getSigningContractInstance, getReadOnlyContractInstance } = walletUtils;
 import TelegramNotifier from './notifier/TelegramNotifier';
@@ -57,7 +59,6 @@ const fetch = require('node-fetch');
 const { queryTraderState, queryAMMState, queryPerpParameters } = perpQueries;
 
 let orderbook = Array();
-let originalOrders = Object();
 let perpIds = Array();
 
 const runId = uuidv4();
@@ -190,7 +191,7 @@ function runForNumBlocksManager<T>(
                         let msg = `Block processing is falling behind. Block being processed is ${blockProcessing}, while current blockNumber is ${blockNumber}`;
                         console.warn(msg);
                         await notifier.sendMessage(msg);
-                        return reject(msg);
+                        process.exit(1);
                     }
                     return;
                 }
@@ -212,9 +213,9 @@ function runForNumBlocksManager<T>(
                         blockProcessing = 0;
                         let res = await executeOrders(
                             signingLoBs,
+                            OWNER_ADDRESS,
                             tradeableOrders,
                             orderbook,
-                            originalOrders
                         );
                         if (Object.keys(res).length) {
                             console.log(`relayed orders`, res);
@@ -280,7 +281,6 @@ function runForNumBlocksManager<T>(
                     orderbook = removeOrderFromOrderbookByDigest(
                         digest,
                         orderbook,
-                        originalOrders
                     );
                     return;
                 } catch (error) {
@@ -294,7 +294,6 @@ function runForNumBlocksManager<T>(
                 orderbook = removeOrderFromOrderbookByDigest(
                     digest,
                     orderbook,
-                    originalOrders
                 );
             } catch (error) {
                 console.log(
@@ -327,8 +326,7 @@ function listenForLimitOrderEvents<T>(
                 orderbook = addOrderToOrderbook(
                     order as Order,
                     orderbook,
-                    digest,
-                    originalOrders
+                    digest
                 );
                 console.log(`Got new order: `, order, orderbook);
             }
@@ -364,9 +362,6 @@ async function initializeRelayer(signingLOBs, driverManager) {
         let idx = 0;
         for (const o of ordersBatch) {
             result.push(orderToOrderTS(o, digestsBatch[idx]));
-            if (o.iDeadline > Math.floor(new Date().getTime() / 1000)) {
-                originalOrders[digestsBatch[idx]] = o;
-            }
             idx++;
         }
     } while (ordersBatch.length === batchSize);
@@ -379,7 +374,7 @@ async function initializeRelayer(signingLOBs, driverManager) {
         throw new Error(msg);
     }
     result = result.filter(
-        (o) => o.iDeadline > Math.floor(new Date().getTime() / 1000)
+        (o) => o.iDeadline > Math.floor(new Date().getTime() / 1000) && !isOrderFailed(o.digest)
     );
     orderbook = sortOrderbook(result);
     for (const order of orderbook) {

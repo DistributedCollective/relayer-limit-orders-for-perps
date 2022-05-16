@@ -1,8 +1,4 @@
-import {
-    perpUtils,
-    PerpParameters,
-    AMMState,
-} from '@sovryn/perpetual-swap';
+import { perpUtils, PerpParameters, AMMState } from '@sovryn/perpetual-swap';
 import * as walletUtils from '@sovryn/perpetual-swap/dist/scripts/utils/walletUtils';
 import { perpMath } from '@sovryn/perpetual-swap';
 import { Contract, BigNumber as BN, BigNumberish, BytesLike } from 'ethers';
@@ -79,13 +75,11 @@ export function addOrderToOrderbook(
     order: Order,
     orderbook: OrderTS[],
     digest,
-    originalOrders
 ): OrderTS[] {
     let orderTS = orderToOrderTS(order, digest);
     if (orderTS.iDeadline <= Math.floor(new Date().getTime() / 1000)) {
         return orderbook;
     }
-    originalOrders[digest] = order;
     orderbook.push(orderTS);
     return sortOrderbook(orderbook);
 }
@@ -93,21 +87,17 @@ export function addOrderToOrderbook(
 export function removeOrderFromOrderbook(
     order: OrderTS,
     orderbook: OrderTS[],
-    originalOrders
 ): OrderTS[] {
     return removeOrderFromOrderbookByDigest(
         order.digest,
-        orderbook,
-        originalOrders
+        orderbook
     );
 }
 
 export function removeOrderFromOrderbookByDigest(
     digest,
     orderbook: OrderTS[],
-    originalOrders
 ): OrderTS[] {
-    delete originalOrders[digest];
     let idxOrder = orderbook.findIndex((o) => o.digest === digest);
     if (idxOrder !== -1) {
         orderbook.splice(idxOrder, 1);
@@ -182,7 +172,7 @@ export async function createLimitOrder(
         chainId
     );
 
-    let signature = signer.signMessage(orderDigest);
+    let signature = signer.signMessage(ethers.utils.arrayify(orderDigest));
 
     let tx1 = await limitOrderBook.createLimitOrder(order, signature, {
         gasLimit: 3_000_000,
@@ -336,9 +326,9 @@ export function sleep(ms) {
 
 export async function executeOrders(
     signingLoBs,
+    referral,
     ordersTS: OrderTS[],
     orderbook: OrderTS[],
-    originalOrders
 ) {
     let execOrdersPromises = Array();
     let i = 0;
@@ -346,40 +336,41 @@ export async function executeOrders(
     let res = Object();
 
     for (let orderTS of ordersTS) {
-        if (isOrderLocked(orderTS.digest)) continue;
-        let order = originalOrders[orderTS.digest];
-        if (!order) {
+        let orderDigest = orderTS.digest;
+        if (isOrderLocked(orderDigest)) continue;
+        if (isOrderFailed(orderDigest)) {
             console.log(
-                `Could not find order ${orderTS.digest} within the originalOrders: `,
-                originalOrders
+                `Order ${orderDigest} is marked as failed. Skipping it.`
             );
-            continue;
         }
-        lockOrder(orderTS.digest);
+
+        lockOrder(orderDigest);
         let signingLoB = signingLoBs[i % batchSize];
         /////////
         execOrdersPromises.push(
             signingLoB
-                .executeLimitOrder(order, { gasLimit: 3_000_000 })
+                .executeLimitOrderByDigest(orderDigest, referral, {
+                    gasLimit: 4_000_000,
+                })
                 .then((tx) => tx.wait()) //tx is in mempool
                 .then((settledTx) => {
-                    res[orderTS.digest] = {
+                    res[orderDigest] = {
                         status: 'SUCCESS',
                         result: settledTx,
                     };
+                    setTimeout(() => unlockOrder(orderDigest), 15_000);
+                })
+                .catch((e) => {
+                    markOrderAsFailed(orderDigest, JSON.stringify(e, null, 2))
+                    res[orderDigest] = { status: 'FAILED', result: e };
+                })
+                .finally(() => {
+                    console.log(`Removed order from orderbook`);
                     removeOrderFromOrderbook(
                         orderTS,
-                        orderbook,
-                        originalOrders
+                        orderbook
                     );
-                    setTimeout(() => unlockOrder(orderTS.digest), 15_000);
                 })
-                .catch(
-                    (e) =>
-                        (res[orderTS.digest] = { status: 'FAILED', result: e })
-                )
-            // .finally(() => {
-            // })
         );
         if (execOrdersPromises.length === batchSize) {
             await Promise.all(execOrdersPromises);
@@ -499,6 +490,32 @@ export function getNumFailures(failureName) {
 export function resetFailures(failureName) {
     const failureFileName = getFailureFileName(failureName);
     writeFileSync(failureFileName, `0`);
+}
+
+export function isOrderFailed(orderDigest) {
+    const orderFailedFilename = getFailedOrderFilename(orderDigest);
+    try {
+        const content = readFileSync(orderFailedFilename);
+        return !!content;
+    } catch (e) {
+        //an error is thrown when file does not exist. If a user is not locked, it won't have this lock file, so we don't consider this an actual error, but an indication of user-not-locked
+    }
+    return false;
+}
+
+export function markOrderAsFailed(orderDigest, errorMessage) {
+    let orderFailedFilename = getFailedOrderFilename(orderDigest);
+
+    writeFileSync(orderFailedFilename, errorMessage.toString());
+}
+
+function getFailedOrderFilename(orderDigest): string {
+    return (
+        (process.env.LOCKING_FOLDER || '/tmp') +
+        '/failed-order-' +
+        orderDigest.toString().toLowerCase() +
+        '.lock'
+    );
 }
 
 function getFailureFileName(failureName) {
