@@ -88,8 +88,9 @@ let notifier = getTelegramNotifier(TELEGRAM_BOT_SECRET, TELEGRAM_CHANNEL_ID);
         orderbook = await initializeRelayer(signingLOBs, driverManager);
 
         if (process.env.HEARTBEAT_SHOULD_RESTART_URL) {
-            //only check for restarting after 1 minute after the script started, so it has enough time to send some heartbeats
-            setTimeout(() =>
+            //only check if dead after 1 minute after the script started, so it has enough time to send some heartbeats
+            setTimeout(() =>{
+                console.log(`Starting to check if shouldRestart....`);
                 setInterval(
                     () =>
                         shouldRestart(
@@ -97,7 +98,7 @@ let notifier = getTelegramNotifier(TELEGRAM_BOT_SECRET, TELEGRAM_CHANNEL_ID);
                             `RELAYER_${PERP_NAME || 'unknown'}_BLOCK_PROCESSED`
                         ),
                     5_000
-                ), 60_000
+                )}, 60_000
             );
         } else {
             console.warn(
@@ -189,11 +190,11 @@ function runForNumBlocksManager<T>(
                 if (blockProcessing) {
                     if (blockNumber - blockProcessing > 5) {
                         console.log(
-                            `Skip processing block ${blockNumber} because block ${blockProcessing} is still being processed`
+                            `RELAYER_${PERP_NAME || "undefined"} Skip processing block ${blockNumber} because block ${blockProcessing} is still being processed`
                         );
                     }
                     if (blockNumber - blockProcessing > 100) {
-                        let msg = `Block processing is falling behind. Block being processed is ${blockProcessing}, while current blockNumber is ${blockNumber}`;
+                        let msg = `RELAYER_${PERP_NAME || "undefined"} Block processing is falling behind. Block being processed is ${blockProcessing}, while current blockNumber is ${blockNumber}`;
                         console.warn(msg);
                         await notifier.sendMessage(msg);
                         process.exit(1);

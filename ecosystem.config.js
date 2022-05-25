@@ -5,7 +5,7 @@ module.exports = {
     max_memory_restart : "1000M",
     log_date_format : "YYYY-MM-DD HH:mm Z",
     env: {
-      ORDER_BOOK_ADDRESS: "0x66E69f3052A7B5Ce40f146a486d0209425cA4FD1",
+      ORDER_BOOK_ADDRESS: "0xb8212BAda584308B69392663D296B82b40060267",
       IDX_ADDR_START: 0,
       NUM_ADDRESSES: 3,
       PERP_NAME: 'BTCUSD',
@@ -17,7 +17,7 @@ module.exports = {
     max_memory_restart : "1000M",
     log_date_format : "YYYY-MM-DD HH:mm Z",
     env: {
-      ORDER_BOOK_ADDRESS: "0x8cD6b7CA3006e874875e03f806969D095B335AD0",
+      ORDER_BOOK_ADDRESS: "0x5F90B2296318A4Fc72CC2cA541C46CF041A96607",
       IDX_ADDR_START: 3,
       NUM_ADDRESSES: 3,
       PERP_NAME: 'BNBUSD',
