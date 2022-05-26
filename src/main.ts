@@ -89,7 +89,7 @@ let notifier = getTelegramNotifier(TELEGRAM_BOT_SECRET, TELEGRAM_CHANNEL_ID);
 
         if (process.env.HEARTBEAT_SHOULD_RESTART_URL) {
             //only check if dead after 1 minute after the script started, so it has enough time to send some heartbeats
-            setTimeout(() =>{
+            setTimeout(() => {
                 console.log(`Starting to check if shouldRestart....`);
                 setInterval(
                     () =>
@@ -98,8 +98,8 @@ let notifier = getTelegramNotifier(TELEGRAM_BOT_SECRET, TELEGRAM_CHANNEL_ID);
                             `RELAYER_${PERP_NAME || 'unknown'}_BLOCK_PROCESSED`
                         ),
                     5_000
-                )}, 60_000
-            );
+                );
+            }, 60_000);
         } else {
             console.warn(
                 'Env var HEARTBEAT_SHOULD_RESTART_URL is not set, so if the nodes are pausing the connection, can not restart automatically.'
@@ -178,133 +178,150 @@ function runForNumBlocksManager<T>(
     maxBlocks
 ): Promise<void> {
     return new Promise((resolve, reject) => {
-        driverManager.once('error', (e) => {
-            console.log(`driverManager.once('error') triggered`, e);
-            reject(e);
-        });
+        try {
+            driverManager.once('error', (e) => {
+                console.log(`driverManager.once('error') triggered`, e);
+                reject(e);
+            });
 
-        let numBlocks = 0;
-        let blockProcessing = 0;
-        driverManager.provider.on('block', async (blockNumber) => {
-            try {
-                if (blockProcessing) {
-                    if (blockNumber - blockProcessing > 5) {
-                        console.log(
-                            `RELAYER_${PERP_NAME || "undefined"} Skip processing block ${blockNumber} because block ${blockProcessing} is still being processed`
-                        );
+            let numBlocks = 0;
+            let blockProcessing = 0;
+            driverManager.provider.on('block', async (blockNumber) => {
+                try {
+                    if (blockProcessing) {
+                        if (blockNumber - blockProcessing > 5) {
+                            console.log(
+                                `RELAYER_${
+                                    PERP_NAME || 'undefined'
+                                } Skip processing block ${blockNumber} because block ${blockProcessing} is still being processed`
+                            );
+                        }
+                        if (blockNumber - blockProcessing > 100) {
+                            let msg = `RELAYER_${
+                                PERP_NAME || 'undefined'
+                            } Block processing is falling behind. Block being processed is ${blockProcessing}, while current blockNumber is ${blockNumber}`;
+                            console.warn(msg);
+                            await notifier.sendMessage(msg);
+                            process.exit(1);
+                        }
+                        return;
                     }
-                    if (blockNumber - blockProcessing > 100) {
-                        let msg = `RELAYER_${PERP_NAME || "undefined"} Block processing is falling behind. Block being processed is ${blockProcessing}, while current blockNumber is ${blockNumber}`;
-                        console.warn(msg);
-                        await notifier.sendMessage(msg);
-                        process.exit(1);
-                    }
-                    return;
-                }
-                blockProcessing = blockNumber;
-                let timeStart = new Date().getTime();
+                    blockProcessing = blockNumber;
+                    let timeStart = new Date().getTime();
 
-                for (const perpId of perpIds) {
-                    let [ammData, perpParams] = await Promise.all([
-                        queryAMMState(driverManager, perpId),
-                        queryPerpParameters(driverManager, perpId),
-                    ]);
+                    for (const perpId of perpIds) {
+                        let [ammData, perpParams] = await Promise.all([
+                            queryAMMState(driverManager, perpId),
+                            queryPerpParameters(driverManager, perpId),
+                        ]);
 
-                    let tradeableOrders = getMatchingOrders(
-                        orderbook,
-                        perpParams,
-                        ammData
-                    );
-                    if (tradeableOrders.length) {
-                        blockProcessing = 0;
-                        let res = await executeOrders(
-                            signingLoBs,
-                            OWNER_ADDRESS,
-                            tradeableOrders,
-                            orderbook
+                        let tradeableOrders = getMatchingOrders(
+                            orderbook,
+                            perpParams,
+                            ammData
                         );
-                        if (Object.keys(res).length) {
-                            console.log(`relayed orders`, res);
+                        if (tradeableOrders.length) {
+                            blockProcessing = 0;
+                            let res = await executeOrders(
+                                signingLoBs,
+                                OWNER_ADDRESS,
+                                tradeableOrders,
+                                orderbook
+                            );
+                            if (Object.keys(res).length) {
+                                console.log(`relayed orders`, res);
+                            }
                         }
                     }
-                }
-                let timeEnd = new Date().getTime();
-                if (numBlocks % 50 === 0) {
-                    console.log(
-                        `[${new Date()} (${
-                            timeEnd - timeStart
-                        } ms) block: ${blockNumber}] numBlocks ${numBlocks} active orders ${
-                            orderbook.length
-                        }`
+                    let timeEnd = new Date().getTime();
+                    if (numBlocks % 50 === 0) {
+                        console.log(
+                            `[${new Date()} (${
+                                timeEnd - timeStart
+                            } ms) block: ${blockNumber}] numBlocks ${numBlocks} active orders ${
+                                orderbook.length
+                            }`
+                        );
+                    }
+                    await sendHeartBeat(
+                        `RELAYER_${PERP_NAME || 'unknown'}_BLOCK_PROCESSED`,
+                        {
+                            blockNumber,
+                            runId,
+                            duration: timeEnd - timeStart,
+                        },
+                        notifier
                     );
-                }
-                await sendHeartBeat(
-                    `RELAYER_${PERP_NAME || 'unknown'}_BLOCK_PROCESSED`,
-                    {
-                        blockNumber,
-                        runId,
-                        duration: timeEnd - timeStart,
-                    },
-                    notifier
-                );
-                blockProcessingErrors = 0;
-                blockProcessing = 0;
-                numBlocks++;
-                if (numBlocks >= maxBlocks) {
-                    numBlocks = 0;
-                    return resolve();
-                }
-            } catch (error) {
-                blockProcessing = 0;
-                console.log(`Error in block processing callback:`, error);
-                blockProcessingErrors++;
-                if (blockProcessingErrors >= 5) {
                     blockProcessingErrors = 0;
-                    await notifier.sendMessage(
-                        `Error in block processing callback ${
-                            (error as Error).message
-                        }`
-                    );
+                    blockProcessing = 0;
+                    numBlocks++;
+                    if (numBlocks >= maxBlocks) {
+                        numBlocks = 0;
+                        return resolve();
+                    }
+                } catch (error) {
+                    blockProcessing = 0;
+                    console.log(`Error in block processing callback:`, error);
+                    blockProcessingErrors++;
+                    if (blockProcessingErrors >= 5) {
+                        blockProcessingErrors = 0;
+                        await notifier.sendMessage(
+                            `Error in block processing callback ${
+                                (error as Error).message
+                            }`
+                        );
+                    }
+                    return reject(error);
                 }
-                return reject(error);
-            }
-        });
+            });
 
-        driverManager.on(
-            'Trade',
-            (
-                perpId,
-                traderAddr,
-                positionId,
-                digest,
-                orderFlags,
-                fTradeAmountBC,
-                fNewPos,
-                fPrice,
-                fLimitPrice
-            ) => {
+            driverManager.on(
+                'Trade',
+                (
+                    perpId,
+                    traderAddr,
+                    positionId,
+                    digest,
+                    orderFlags,
+                    fTradeAmountBC,
+                    fNewPos,
+                    fPrice,
+                    fLimitPrice
+                ) => {
+                    try {
+                        orderbook = removeOrderFromOrderbookByDigest(
+                            digest,
+                            orderbook
+                        );
+                        return;
+                    } catch (error) {
+                        console.log(`Error in the Trade event handler`, error);
+                    }
+                }
+            );
+
+            driverManager.on('PerpetualLimitOrderCancelled', (digest) => {
                 try {
                     orderbook = removeOrderFromOrderbookByDigest(
                         digest,
                         orderbook
                     );
-                    return;
                 } catch (error) {
-                    console.log(`Error in the Trade event handler`, error);
+                    console.log(
+                        `Error in the PerpetualLimitOrderCancelled event handler`,
+                        error
+                    );
                 }
-            }
-        );
-
-        driverManager.on('PerpetualLimitOrderCancelled', (digest) => {
-            try {
-                orderbook = removeOrderFromOrderbookByDigest(digest, orderbook);
-            } catch (error) {
-                console.log(
-                    `Error in the PerpetualLimitOrderCancelled event handler`,
-                    error
-                );
-            }
-        });
+            });
+        } catch (e) {
+            console.log(
+                `[RELAYER_${
+                    PERP_NAME || 'unknown'
+                }] error in runForNumBlocksManager:`,
+                e
+            );
+            return Promise.reject(e);
+        }
     });
 }
 
@@ -315,23 +332,39 @@ function runForNumBlocksManager<T>(
  */
 function listenForLimitOrderEvents<T>(driverLOB): Promise<void> {
     return new Promise((resolve, reject) => {
-        driverLOB.once('error', (e) => {
-            console.log(`driverLOB.once('error') triggered`, e);
-            reject(e);
-        });
+        try {
+            driverLOB.once('error', (e) => {
+                console.log(`driverLOB.once('error') triggered`, e);
+                reject(e);
+            });
 
-        driverLOB.on(
-            'PerpetualLimitOrderCreated',
-            async (perpId, traderAddress, limitPrice, triggerPrice, digest) => {
-                let order = await driverLOB.orderOfDigest(digest);
-                orderbook = addOrderToOrderbook(
-                    order as Order,
-                    orderbook,
+            driverLOB.on(
+                'PerpetualLimitOrderCreated',
+                async (
+                    perpId,
+                    traderAddress,
+                    limitPrice,
+                    triggerPrice,
                     digest
-                );
-                console.log(`Got new order: `, order, orderbook);
-            }
-        );
+                ) => {
+                    let order = await driverLOB.orderOfDigest(digest);
+                    orderbook = addOrderToOrderbook(
+                        order as Order,
+                        orderbook,
+                        digest
+                    );
+                    console.log(`Got new order: `, order, orderbook);
+                }
+            );
+        } catch (e) {
+            console.log(
+                `[RELAYER_${
+                    PERP_NAME || 'unknown'
+                }] error in listenForLimitOrderEvents:`,
+                e
+            );
+            return Promise.reject(e);
+        }
     });
 }
 
