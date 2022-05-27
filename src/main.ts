@@ -15,6 +15,7 @@ const {
     TELEGRAM_CHANNEL_ID,
     IDX_ADDR_START,
     NUM_ADDRESSES,
+    PERP_ID,
     PERP_NAME,
     OWNER_ADDRESS,
 } = process.env;
@@ -59,7 +60,6 @@ const fetch = require('node-fetch');
 const { queryTraderState, queryAMMState, queryPerpParameters } = perpQueries;
 
 let orderbook = Array();
-let perpIds = Array();
 
 const runId = uuidv4();
 console.log(`runId: ${runId}`);
@@ -209,10 +209,9 @@ function runForNumBlocksManager<T>(
                     blockProcessing = blockNumber;
                     let timeStart = new Date().getTime();
 
-                    for (const perpId of perpIds) {
                         let [ammData, perpParams] = await Promise.all([
-                            queryAMMState(driverManager, perpId),
-                            queryPerpParameters(driverManager, perpId),
+                            queryAMMState(driverManager, PERP_ID as any),
+                            queryPerpParameters(driverManager, PERP_ID as any),
                         ]);
 
                         let tradeableOrders = getMatchingOrders(
@@ -232,7 +231,6 @@ function runForNumBlocksManager<T>(
                                 console.log(`relayed orders`, res);
                             }
                         }
-                    }
                     let timeEnd = new Date().getTime();
                     if (numBlocks % 50 === 0) {
                         console.log(
@@ -289,6 +287,9 @@ function runForNumBlocksManager<T>(
                     fLimitPrice
                 ) => {
                     try {
+                        if (perpId.toLowerCase() !== PERP_ID.toLowerCase()){
+                            return;
+                        }
                         orderbook = removeOrderFromOrderbookByDigest(
                             digest,
                             orderbook
@@ -347,6 +348,9 @@ function listenForLimitOrderEvents<T>(driverLOB): Promise<void> {
                     triggerPrice,
                     digest
                 ) => {
+                    if (perpId.toLowerCase() !== PERP_ID.toLowerCase()){
+                        return;
+                    }
                     let order = await driverLOB.orderOfDigest(digest);
                     orderbook = addOrderToOrderbook(
                         order as Order,
@@ -377,7 +381,6 @@ async function initializeRelayer(signingLOBs, driverManager) {
     let result = Array();
     let ordersBatch = Array();
     let digestsBatch = Array();
-    perpIds = await getPerpetualIds(driverManager);
     do {
         [ordersBatch, digestsBatch] = await driverLOB.pollLimitOrders(
             lastDigest,
