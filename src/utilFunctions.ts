@@ -296,6 +296,10 @@ function orderTradeable(order: OrderTS, perpParams, ammData): Boolean {
     //   console.log(`triggerPrice: ${order.fTriggerPrice}, markPrice: ${markPrice}, orderPrice: ${orderPrice}, limitPrice: ${order.fLimitPrice}`);
     // }
 
+    // if(order.fAmount >= -0.0002 && order.fAmount < 0){
+    //     console.log(`amount: ${order.fAmount} orderPrice: ${orderPrice} markPrice: ${markPrice} triggerPrice: ${order.fTriggerPrice} limitPrice: ${order.fLimitPrice}, `, /*perpParams, ammData*/)
+    // }
+
     // Buy orders
     if (order.fAmount > 0) {
         if (

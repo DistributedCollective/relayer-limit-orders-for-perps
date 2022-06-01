@@ -209,28 +209,28 @@ function runForNumBlocksManager<T>(
                     blockProcessing = blockNumber;
                     let timeStart = new Date().getTime();
 
-                        let [ammData, perpParams] = await Promise.all([
-                            queryAMMState(driverManager, PERP_ID as any),
-                            queryPerpParameters(driverManager, PERP_ID as any),
-                        ]);
+                    let [ammData, perpParams] = await Promise.all([
+                        queryAMMState(driverManager, PERP_ID as any),
+                        queryPerpParameters(driverManager, PERP_ID as any),
+                    ]);
 
-                        let tradeableOrders = getMatchingOrders(
-                            orderbook,
-                            perpParams,
-                            ammData
+                    let tradeableOrders = getMatchingOrders(
+                        orderbook,
+                        perpParams,
+                        ammData
+                    );
+                    if (tradeableOrders.length) {
+                        blockProcessing = 0;
+                        let res = await executeOrders(
+                            signingLoBs,
+                            OWNER_ADDRESS,
+                            tradeableOrders,
+                            orderbook
                         );
-                        if (tradeableOrders.length) {
-                            blockProcessing = 0;
-                            let res = await executeOrders(
-                                signingLoBs,
-                                OWNER_ADDRESS,
-                                tradeableOrders,
-                                orderbook
-                            );
-                            if (Object.keys(res).length) {
-                                console.log(`relayed orders`, res);
-                            }
+                        if (Object.keys(res).length) {
+                            console.log(`relayed orders`, res);
                         }
+                    }
                     let timeEnd = new Date().getTime();
                     if (numBlocks % 50 === 0) {
                         console.log(
@@ -287,7 +287,7 @@ function runForNumBlocksManager<T>(
                     fLimitPrice
                 ) => {
                     try {
-                        if (perpId.toLowerCase() !== PERP_ID.toLowerCase()){
+                        if (perpId.toLowerCase() !== PERP_ID.toLowerCase()) {
                             return;
                         }
                         orderbook = removeOrderFromOrderbookByDigest(
@@ -344,11 +344,17 @@ function listenForLimitOrderEvents<T>(driverLOB): Promise<void> {
                 async (
                     perpId,
                     traderAddress,
+                    fAmount,
                     limitPrice,
                     triggerPrice,
+                    iDeadline,
+                    referrerAddr,
+                    flags,
+                    fLeverage,
+                    createdTimestamp,
                     digest
                 ) => {
-                    if (perpId.toLowerCase() !== PERP_ID.toLowerCase()){
+                    if (perpId.toLowerCase() !== PERP_ID.toLowerCase()) {
                         return;
                     }
                     let order = await driverLOB.orderOfDigest(digest);
