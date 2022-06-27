@@ -5,8 +5,8 @@ module.exports = {
     max_memory_restart : "1000M",
     log_date_format : "YYYY-MM-DD HH:mm Z",
     env: {
-      PERP_ID: "0xada5013122d395ba3c54772283fb069b10426056ef8ca54750cb9bb552a59e7d",
-      ORDER_BOOK_ADDRESS: "0x29a0BC198E7ae04E91d2924da8093FAAF9d94950",
+      PERP_ID: "0x369d7c01e026e750d616303e0fa4ac262c55e4ebe19a54cbf15d814b03b1182b",
+      ORDER_BOOK_ADDRESS: "0x1A4128d3ECa24F881b54527E16aaFd1d64A733cC",
       IDX_ADDR_START: 0,
       NUM_ADDRESSES: 3,
       PERP_NAME: 'BTCUSD',
@@ -18,8 +18,8 @@ module.exports = {
     max_memory_restart : "1000M",
     log_date_format : "YYYY-MM-DD HH:mm Z",
     env: {
-      PERP_ID: "0xcc69885fda6bcc1a4ace058b4a62bf5e179ea78fd58a1ccd71c22cc9b688792f",
-      ORDER_BOOK_ADDRESS: "0xe2b95C2bcfEbb2fF73e103d86a2Eb2b82Cb34Dd5",
+      PERP_ID: "0x75848bb7f08d2e009e76fdad5a1c6129e48df34d81245405f9c43b53d204dfaf",
+      ORDER_BOOK_ADDRESS: "0x959402A2bc8A2984100a623121712dA165b4A74c",
       IDX_ADDR_START: 0,
       NUM_ADDRESSES: 3,
       PERP_NAME: 'BNBUSD',
