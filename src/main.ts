@@ -230,12 +230,12 @@ function runForNumBlocksManager<T>(
                         if (Object.keys(res).length) {
                             console.log(`relayed orders`, res);
                             for (const traderId in res) {
-                                const relayedMessage = `[RELAYED ORDER in ${PERP_NAME}] [${traderId}](https://${
+                                let relayedMessage = `[RELAYED ORDER in ${PERP_NAME}] [${traderId}](https://${
                                     process.env.TESTNET ? 'testnet.' : ''
                                 }bscscan.com/tx/${
                                     res?.[traderId]?.result?.transactionHash
                                 })  - ${res?.[traderId]?.status}`;
-                                relayedMessage.replace(/\-/g, '\\-');
+                                relayedMessage = relayedMessage.replace(/\-/g, '\\-');
 
                                 console.log(
                                     `relayedMessage: `,
