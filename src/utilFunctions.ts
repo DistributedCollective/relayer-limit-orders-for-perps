@@ -137,7 +137,7 @@ export async function createLimitOrder(
     deadline,
     createdTimestamp,
     referrer = ZERO_ADDRESS,
-    leverage = null,
+    leverage = floatToABK64x64(0),
     executeOrder = false
 ) {
     if (createdTimestamp == null) {
@@ -146,10 +146,6 @@ export async function createLimitOrder(
 
     if (deadline == null) {
         deadline = createdTimestamp + 86400;
-    }
-
-    if (leverage == null) {
-        leverage = floatToABK64x64(0);
     }
 
     let order: Order = {
@@ -198,7 +194,7 @@ export async function createStopLossOrder(
     deadline,
     createdTimestamp,
     referrer = ZERO_ADDRESS,
-    leverage = null,
+    leverage = floatToABK64x64(0),
     executeOrder = false
 ) {
     if (createdTimestamp == null) {
@@ -207,10 +203,6 @@ export async function createStopLossOrder(
 
     if (deadline == null) {
         deadline = createdTimestamp + 86400;
-    }
-
-    if (leverage == null) {
-        leverage = floatToABK64x64(0);
     }
 
     let order: Order = {
