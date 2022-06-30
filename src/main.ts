@@ -71,8 +71,8 @@ let notifier = getTelegramNotifier(TELEGRAM_BOT_SECRET, TELEGRAM_CHANNEL_ID);
         [driverLOB, ...signingLOBs] = await getConnectedAndFundedSigners(
             'LimitOrderBook',
             ORDER_BOOK_ADDRESS,
-            parseInt(IDX_ADDR_START),
-            parseInt(NUM_ADDRESSES),
+            parseInt(IDX_ADDR_START || '0'),
+            parseInt(NUM_ADDRESSES || '3'),
             true
         );
         driverManager = getReadOnlyContractInstance(
@@ -129,8 +129,8 @@ let notifier = getTelegramNotifier(TELEGRAM_BOT_SECRET, TELEGRAM_CHANNEL_ID);
             [driverLOB, ...signingLOBs] = await getConnectedAndFundedSigners(
                 'LimitOrderBook',
                 ORDER_BOOK_ADDRESS,
-                parseInt(IDX_ADDR_START),
-                parseInt(NUM_ADDRESSES),
+                parseInt(IDX_ADDR_START || '0'),
+                parseInt(NUM_ADDRESSES || '3'),
                 true
             );
             driverManager = getReadOnlyContractInstance(
@@ -287,7 +287,10 @@ function runForNumBlocksManager<T>(
                     fLimitPrice
                 ) => {
                     try {
-                        if (perpId.toLowerCase() !== PERP_ID.toLowerCase()) {
+                        if (
+                            perpId.toLowerCase() !==
+                            (PERP_ID || '').toLowerCase()
+                        ) {
                             return;
                         }
                         orderbook = removeOrderFromOrderbookByDigest(
@@ -354,7 +357,9 @@ function listenForLimitOrderEvents<T>(driverLOB): Promise<void> {
                     createdTimestamp,
                     digest
                 ) => {
-                    if (perpId.toLowerCase() !== PERP_ID.toLowerCase()) {
+                    if (
+                        perpId.toLowerCase() !== (PERP_ID || '').toLowerCase()
+                    ) {
                         return;
                     }
                     let order = await driverLOB.orderOfDigest(digest);

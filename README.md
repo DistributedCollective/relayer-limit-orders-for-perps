@@ -12,7 +12,7 @@ $ npm install -g ts-node
 
 ## Configure it
 
-Edit the .env file:
+Edit the ecosystem.config.js file:
 
 Make sure that `OWNER_ADDRESS` is **one of your wallet addresses**, because that's where the commissions earned by liquidating traders will end into!
 
@@ -23,9 +23,10 @@ For now there are 2 perpetuals running: BTC/USD and BNB/USD. In order to have on
 - `IDX_START_ADDR` - the index of the start wallet generated using the `MNEMONIC` (ie: for `IDX_START_ADDR=3`, the derivation path of the starting wallet is `m/44'/60'/0'/0/3`)
 - `NUM_ADDRESSES` is the number of wallets that'll be used to relay orders concurrently. (ie: if `IDX_START_ADDR=3` and `NUM_ADDRESSES=3`, then the derivation path of the last wallet used will be `m/44'/60'/0'/0/5`)
 
-Configure `TELEGRAM_BOT_SECRET` and `TELEGRAM_CHANNEL_ID` with the correct credentials of a telegram bot ([here's how you can create your own](https://core.telegram.org/bots#3-how-do-i-create-a-bot)) so that the liquidator can send you notifications* if something goes wrong.
-
 The `HEARTBEAT_LISTENER_URL` is a heartbeat listening API endpoint. [TheNurse](https://github.com/DistributedCollective/TheNurse) is a project that's being built for this. If there's a running instance of TheNurse at `https://thenurse.example.com`, then `HEARTBEAT_LISTENER_URL` would be set to `https://thenurse.example.com/api/heartbeats`
+
+Create and edit the `.env` file (`mv .env-example .env`):
+Configure `TELEGRAM_BOT_SECRET` and `TELEGRAM_CHANNEL_ID` with the correct credentials of a telegram bot ([here's how you can create your own](https://core.telegram.org/bots#3-how-do-i-create-a-bot)) so that the liquidator can send you notifications* if something goes wrong.
 
 ## Run it.
 
