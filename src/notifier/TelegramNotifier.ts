@@ -15,7 +15,7 @@ export default class TelegramNotifier implements INotifier {
     async sendMessage(message: string, extra = {}): Promise<void> {
         try {
             let now = new Date().getTime();
-            if(now - this.lastSentAt < this.delayBetweenMessages){
+            if(now - this.lastSentAt < this.delayBetweenMessages && message.indexOf('RELAYED') === -1){
                 console.log(`RATE LIMIT, not sending message ${message}`);
                 return;
             }

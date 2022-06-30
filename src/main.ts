@@ -229,6 +229,22 @@ function runForNumBlocksManager<T>(
                         );
                         if (Object.keys(res).length) {
                             console.log(`relayed orders`, res);
+                            for (const traderId in res) {
+                                const relayedMessage = `[RELAYED ORDER in ${PERP_NAME}] [${traderId}](https://${
+                                    process.env.TESTNET ? 'testnet.' : ''
+                                }bscscan.com/tx/${
+                                    res?.[traderId]?.result?.transactionHash
+                                })  - ${res?.[traderId]?.status}`;
+                                relayedMessage.replace(/\-/g, '\\-');
+
+                                console.log(
+                                    `relayedMessage: `,
+                                    relayedMessage
+                                );
+                                await notifier.sendMessage(relayedMessage, {
+                                    parse_mode: 'MarkdownV2',
+                                });
+                            }
                         }
                     }
                     let timeEnd = new Date().getTime();
