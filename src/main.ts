@@ -18,8 +18,12 @@ const {
     PERP_ID,
     PERP_NAME,
     OWNER_ADDRESS,
+    DB_NAME
 } = process.env;
 let bscNodeURLs = JSON.parse(NODE_URLS || '[]');
+
+import dbCtrl from "./db";
+import monitor from "./monitor";
 
 console.log(
     `Perp name ${PERP_NAME}, Manager address ${MANAGER_ADDRESS}, OrderBook address ${ORDER_BOOK_ADDRESS}`
@@ -65,16 +69,23 @@ const runId = uuidv4();
 console.log(`runId: ${runId}`);
 let notifier = getTelegramNotifier(TELEGRAM_BOT_SECRET, TELEGRAM_CHANNEL_ID);
 
-(async function main() {
-    let driverLOB, signingLOBs, driverManager;
+module.exports.start = async function (io) {
+    let [driverLOB, ...signingLOBs] = await getConnectedAndFundedSigners(
+        'LimitOrderBook',
+        ORDER_BOOK_ADDRESS,
+        parseInt(IDX_ADDR_START || '0'),
+        parseInt(NUM_ADDRESSES || '3'),
+        true
+    );
+    await Promise.all([
+        startRelayer(driverLOB, signingLOBs),
+        runMonitoring(io, driverLOB, signingLOBs),
+    ]);
+};
+
+async function startRelayer(driverLOB, signingLOBs) {
+    let driverManager;
     try {
-        [driverLOB, ...signingLOBs] = await getConnectedAndFundedSigners(
-            'LimitOrderBook',
-            ORDER_BOOK_ADDRESS,
-            parseInt(IDX_ADDR_START || '0'),
-            parseInt(NUM_ADDRESSES || '3'),
-            true
-        );
         driverManager = getReadOnlyContractInstance(
             MANAGER_ADDRESS,
             bscNodeURLs,
@@ -106,44 +117,17 @@ let notifier = getTelegramNotifier(TELEGRAM_BOT_SECRET, TELEGRAM_CHANNEL_ID);
             );
         }
 
-        while (true) {
-            try {
-                await Promise.race([
-                    listenForLimitOrderEvents(driverLOB),
-                    runForNumBlocksManager(
-                        driverManager,
-                        signingLOBs,
-                        maxBlocksBeforeReconnect
-                    ),
-                ]);
-                console.log(`Ran for ${maxBlocksBeforeReconnect}`);
-            } catch (error) {
-                console.log(`Error in while(true):`, error);
-                // await notifier.sendMessage(`Error in while(true): ${(error as any).message}`);
-            }
+        await Promise.race([
+            listenForLimitOrderEvents(driverLOB),
+            runForNumBlocksManager(
+                driverManager,
+                signingLOBs,
+                maxBlocksBeforeReconnect
+            ),
+        ]);
 
-            //remove event listeners and reconnect
-            driverLOB.provider.removeAllListeners();
-            driverLOB.removeAllListeners();
-
-            [driverLOB, ...signingLOBs] = await getConnectedAndFundedSigners(
-                'LimitOrderBook',
-                ORDER_BOOK_ADDRESS,
-                parseInt(IDX_ADDR_START || '0'),
-                parseInt(NUM_ADDRESSES || '3'),
-                true
-            );
-            driverManager = getReadOnlyContractInstance(
-                MANAGER_ADDRESS,
-                bscNodeURLs,
-                'IPerpetualManager'
-            );
-            console.log(
-                `LimitOrder connected to node ${driverLOB.provider.connection.url}\nManager connected to ${driverManager.provider.connection.url}`
-            );
-            orderbook = await initializeRelayer([driverLOB], driverManager);
-            resetFailures('GENERAL_ERROR');
-        }
+        // PM2 will restart the process when it exits
+        process.exit(1);
     } catch (error) {
         incrementFailures('GENERAL_ERROR');
         const numFailures = getNumFailures('GENERAL_ERROR');
@@ -162,7 +146,34 @@ let notifier = getTelegramNotifier(TELEGRAM_BOT_SECRET, TELEGRAM_CHANNEL_ID);
         driverLOB?.removeAllListeners();
         process.exit(0);
     }
-})();
+}
+
+async function runMonitoring(io, driverManager, signingManagers) {
+    try {
+        await dbCtrl.initDb(DB_NAME);
+        monitor.start(driverManager, signingManagers, orderbook);
+        io.on("connection", (socket) => {
+            socket.on("getAccountsInfo", async (cb) => {
+                monitor.getAccountsInfo(cb);
+            });
+            socket.on("getSignals", async (cb) => monitor.getSignals(cb));
+            socket.on("getOpenPositions", async (cb) => {
+                let ammState = await queryAMMState(driverManager, PERP_ID as any);
+                let markPrice = getMarkPrice(ammState as any);
+                return cb({
+                    openPositions: orderbook,
+                    markPrice,
+                });
+            });
+            socket.on("getNetworkData", async (cb) => monitor.getNetworkData(cb));
+            // socket.on('getTotals', async (cb) => monitor.getTotals(cb));
+            socket.on("getLast24HTotals", async (cb) => monitor.getTotals(cb, true));
+            // socket.on('listTroves', async (...args) => monitor.listTroves(...args));
+        });
+    } catch (error) {
+        console.log(`Error in runMonitoring:`, error);
+    }
+}
 
 let blockProcessingErrors = 0;
 
@@ -235,12 +246,12 @@ function runForNumBlocksManager<T>(
                                 }bscscan.com/tx/${
                                     res?.[traderId]?.result?.transactionHash
                                 })  - ${res?.[traderId]?.status}`;
-                                relayedMessage = relayedMessage.replace(/\-/g, '\\-');
-
-                                console.log(
-                                    `relayedMessage: `,
-                                    relayedMessage
+                                relayedMessage = relayedMessage.replace(
+                                    /\-/g,
+                                    '\\-'
                                 );
+
+                                console.log(`relayedMessage: `, relayedMessage);
                                 await notifier.sendMessage(relayedMessage, {
                                     parse_mode: 'MarkdownV2',
                                 });

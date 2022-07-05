@@ -9,7 +9,7 @@ module.exports = {
       ORDER_BOOK_ADDRESS: "0x1A4128d3ECa24F881b54527E16aaFd1d64A733cC",
       IDX_ADDR_START: 0,
       NUM_ADDRESSES: 3,
-      PERP_NAME: 'TEST-BTCUSD',
+      PERP_NAME: 'RELAYER-TESTNET-BTCUSD',
       OWNER_ADDRESS:"0xE7c7417D1360B188401f4dd4bc757A0bc4dE433f",
       MANAGER_ADDRESS: "0xE952cCc755758A127623163e96B032619Bb42143",
       TOKEN_ADDRESS: "0xcF3D22A034Fa157985F0Fe71F15477446f80Be26",
@@ -17,6 +17,11 @@ module.exports = {
       HEARTBEAT_LISTENER_URL: "https://thenurse.prforge.com/api/heartbeats",
       HEARTBEAT_SHOULD_RESTART_URL: "https://thenurse.prforge.com/api/heartbeats/should-restart",
       TESTNET: true,
+
+      DB_NAME: "relayer_testnet_btcusd.db",
+      BLOCK_EXPLORER: "https://testnet.bscscan.com/",
+      SERVER_PORT: 3014,
+      BALANCE_THRESHOLD: 1,
     }
   },
   {
@@ -29,7 +34,7 @@ module.exports = {
       ORDER_BOOK_ADDRESS: "0x959402A2bc8A2984100a623121712dA165b4A74c",
       IDX_ADDR_START: 0,
       NUM_ADDRESSES: 3,
-      PERP_NAME: 'TEST-BNBUSD',
+      PERP_NAME: 'RELAYER-TESTNET-BNBUSD',
       OWNER_ADDRESS:"0xE7c7417D1360B188401f4dd4bc757A0bc4dE433f",
       MANAGER_ADDRESS: "0xE952cCc755758A127623163e96B032619Bb42143",
       TOKEN_ADDRESS: "0xcF3D22A034Fa157985F0Fe71F15477446f80Be26",
@@ -37,6 +42,11 @@ module.exports = {
       HEARTBEAT_LISTENER_URL: "https://thenurse.prforge.com/api/heartbeats",
       HEARTBEAT_SHOULD_RESTART_URL: "https://thenurse.prforge.com/api/heartbeats/should-restart",
       TESTNET: true,
+
+      DB_NAME: "relayer_testnet_btcusd.db",
+      BLOCK_EXPLORER: "https://testnet.bscscan.com/",
+      SERVER_PORT: 3015,
+      BALANCE_THRESHOLD: 1,
     }
   }]
 }
