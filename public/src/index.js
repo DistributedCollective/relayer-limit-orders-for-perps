@@ -4,7 +4,7 @@ class AppCtrl {
     constructor($scope) {
         this.lastBlockOurNode = 0;
         this.lastBlockExternalNode = 0;
-        this.numberOpenPositions = 0;
+        this.numberOpenOrders = 0;
         this.numberLiquidationsInQueue = 0;
         this.arbitrageDeals = [];
 
@@ -53,7 +53,7 @@ class AppCtrl {
         this.getNetworkData();
         this.getTotals(); // fire only once
         this.getLast24HTotals();
-        this.getOpenPositions();
+        this.getOpenOrders();
 
         setInterval(() => {
             this.getSignals();
@@ -84,19 +84,6 @@ class AppCtrl {
 
             p.accounts = res;
 
-
-
-            // for (const [addr, balance] of Object.entries(res.signingManagers)){
-            //     p.accounts.push({
-            //         address: addr,
-            //         balanceBNB: {
-            //             balance: balance.balance,
-            //             overThreshold: balance.balance > balance.balanceThreshold,
-            //         },
-            //         type: 'liquidator',
-            //     });
-            // }
-
             p.$scope.$applyAsync();
         });
     }
@@ -113,28 +100,31 @@ class AppCtrl {
         })
     }
 
-    getOpenPositions() {
+    getOpenOrders() {
         let p=this;
 
-        socket.emit("getOpenPositions", (res) => {
-            console.log("open positions:", res);
+        socket.emit("getOpenOrders", (res) => {
+            console.log("open orders:", res);
 
-            p.positionsOverview = {
+            p.ordersOverview = {
                 markPrice: res.markPrice,
-                totalOpenPositionsSize: 0,
-                totalCollateral: 0,
                 totalLongs: 0,
                 totalShorts: 0,
             }
-            p.openPositions = Array();           
+            p.openOrders = Array();           
 
-            for (const [trader, position] of Object.entries(res.openPositions)){
-                position.traderAddress = trader;
-                p.openPositions.push(position);
-                p.positionsOverview.totalLongs += position.marginAccountPositionBC > 0 ? position.marginAccountPositionBC : 0;
-                p.positionsOverview.totalShorts += position.marginAccountPositionBC < 0 ? Math.abs(position.marginAccountPositionBC) : 0;
+            for (const order of res.openOrders){
+                order.fAmount = order.fAmount.toFixed(6);
+                order.fLimitPrice = order.fLimitPrice.toFixed(2);
+                order.fTriggerPrice = order.fTriggerPrice.toFixed(2);
+                order.iDeadline = new Date(order.iDeadline * 1000);
+                order.createdTimestamp = new Date(order.createdTimestamp * 1000);
+
+                p.openOrders.push(order);
+                p.ordersOverview.totalLongs += order.fAmount > 0 ? parseFloat(order.fAmount) : 0;
+                p.ordersOverview.totalShorts += order.fAmount < 0 ? Math.abs(parseFloat(order.fAmount)) : 0;
             }
-            p.positionsOverview.totalOpenPositionsSize = p.positionsOverview.totalLongs + p.positionsOverview.totalShorts;
+            p.ordersOverview.totalOpenOrdersSize = p.ordersOverview.totalLongs + p.ordersOverview.totalShorts;
 
             p.$scope.$applyAsync();
         })

@@ -40,7 +40,7 @@ class MonitorController {
             blockInfoLn: await this.getCurrentBlockPrivateNode(),
             blockInfoPn: await this.getCurrentBlockPublicNode(),
             accountInfoLiq: await this.getAccountsInfo(null),
-            positionInfo: await this.getOpenPositions(),
+            positionInfo: await this.getOpenOrders(),
             perpName: process.env.PERP_NAME,
             //  liqInfo: await this.getOpenLiquidations(),
         };
@@ -67,7 +67,7 @@ class MonitorController {
     //  }
 
     async getTotals(cb, last24h) {
-        console.log(last24h ? "get last 24h totals" : "get totals");
+        // console.log(last24h ? "get last 24h totals" : "get totals");
         const liquidator = await dbCtrl.getTotals("liquidator", last24h);
         const resp = {
             totalLiquidations: liquidator?.totalActionsNumber,
@@ -251,12 +251,12 @@ class MonitorController {
     //     return accountWithInfo;
     // }
 
-    getOpenPositions() {
+    getOpenOrders() {
         return Object.keys(this.positions).length;
     }
 
     //todo: add from-to, to be called from cliet
-    async getOpenPositionsDetails(cb) {
+    async getOpenOrdersDetails(cb) {
         if (typeof cb === "function") cb(this.positions);
     }
     

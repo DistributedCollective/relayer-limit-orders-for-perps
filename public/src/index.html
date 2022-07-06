@@ -13,7 +13,7 @@
 
 <body ng-controller="appCtrl as ctrl">
   <div class="container">
-    <h1>{{ctrl.perpName}} Liquidator</h1>
+    <h1>{{ctrl.perpName}} Orders Relayer</h1>
 
     <div class="row">
       <div class="col-12">
@@ -61,24 +61,24 @@
             <br/>
             <br/>
             <table>
-                <tr><th colspan="7">Open Positions</th></tr>
+                <tr><th colspan="7">Open Orders</th></tr>
                 <tr>
                     <th>Trader</th>
-                    <th>Margin Balance CC</th>
-                    <th>Available Margin CC</th>
-                    <th>Available Cash CC</th>
-                    <th>Margin Account Cash CC</th>
-                    <th>Margin Account Position BC</th>
-                    <th>Margin Account LockedIn Vale QC</th>
+                    <th>Amount</th>
+                    <th>Leverage</th>
+                    <th>Trigger Price</th>
+                    <th>Limit Price</th>
+                    <th>Created</th>
+                    <th>Deadline</th>
                 </tr>
-                <tr ng-repeat="position in ctrl.openPositions">
-                    <td><a ng-href="{{ctrl.blockExplorer}}address/{{position.traderAddress}}" target="_blank">{{ position.traderAddress }}</a></td>
-                    <td>{{ position.marginBalanceCC }}</td>
-                    <td>{{ position.availableMarginCC }}</td>
-                    <td>{{ position.availableCashCC }}</td>
-                    <td>{{ position.marginAccountCashCC }}</td>
-                    <td>{{ position.marginAccountPositionBC }}</td>
-                    <td>{{ position.marginAccountLockedInValueQC }}</td>
+                <tr ng-repeat="order in ctrl.openOrders">
+                    <td><a ng-href="{{ctrl.blockExplorer}}address/{{order.traderAddr}}" target="_blank">{{ order.traderAddr }}</a></td>
+                    <td>{{ order.fAmount }}</td>
+                    <td>{{ order.fLeverage }}</td>
+                    <td>{{ order.fTriggerPrice }}</td>
+                    <td>{{ order.fLimitPrice }}</td>
+                    <td>{{ order.createdTimestamp }}</td>
+                    <td>{{ order.iDeadline }}</td>
                 </tr>
         </div>
     </div>
@@ -89,20 +89,20 @@
         <br />
         <br />
         <table>
-            <tr><th colspan="5">Perpetual Overview</th></tr>
+            <tr><th colspan="5">Orderbook Overview</th></tr>
           <tr>
             <th>Mark Price</th>
-            <th>Total Open Positions</th>
+            <th>Total Open Orders</th>
             <th>Total Longs</th>
             <th>Total Shorts</th>
             <th>Totals</th>
           </tr>
           <tr>
-            <td>{{ ctrl.positionsOverview.markPrice }}</td>
-            <td>{{ ctrl.openPositions.length }}</td>
-            <td>{{ ctrl.positionsOverview.totalLongs }}</td>
-            <td>{{ ctrl.positionsOverview.totalShorts }}</td>
-            <td>{{ ctrl.positionsOverview.totalOpenPositionsSize }}</td>
+            <td>{{ ctrl.ordersOverview.markPrice }}</td>
+            <td>{{ ctrl.openOrders.length }}</td>
+            <td>{{ ctrl.ordersOverview.totalLongs.toFixed(6) }}</td>
+            <td>{{ ctrl.ordersOverview.totalShorts.toFixed(6) }}</td>
+            <td>{{ ctrl.ordersOverview.totalOpenOrdersSize.toFixed(6) }}</td>
           </tr>
         </table>
       </div>

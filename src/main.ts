@@ -157,12 +157,15 @@ async function runMonitoring(io, driverManager, signingManagers) {
                 monitor.getAccountsInfo(cb);
             });
             socket.on("getSignals", async (cb) => monitor.getSignals(cb));
-            socket.on("getOpenPositions", async (cb) => {
-                let ammState = await queryAMMState(driverManager, PERP_ID as any);
-                let markPrice = getMarkPrice(ammState as any);
+            socket.on("getOpenOrders", async (cb) => {
+                // let ammState = await queryAMMState(driverManager, PERP_ID as any);
+                // let markPrice = getMarkPrice(ammState as any);
+                // let ob = orderbook.map( (o: Order) => ({
+
+                // }))
                 return cb({
-                    openPositions: orderbook,
-                    markPrice,
+                    openOrders: orderbook,
+                    // markPrice,
                 });
             });
             socket.on("getNetworkData", async (cb) => monitor.getNetworkData(cb));
@@ -280,10 +283,6 @@ function runForNumBlocksManager<T>(
                     blockProcessingErrors = 0;
                     blockProcessing = 0;
                     numBlocks++;
-                    if (numBlocks >= maxBlocks) {
-                        numBlocks = 0;
-                        return resolve();
-                    }
                 } catch (error) {
                     blockProcessing = 0;
                     console.log(`Error in block processing callback:`, error);
