@@ -21,7 +21,7 @@ module.exports = {
       TESTNET: false,
       DB_NAME: "relayer_mainnet_btcusd.db",
       BLOCK_EXPLORER: "https://www.bscscan.com/",
-      SERVER_PORT: 2005,
+      SERVER_PORT: 2006,
       BALANCE_THRESHOLD: 1,
       GRAPHQL_ENDPOINT: "https://api.thegraph.com/subgraphs/name/distributedcollective/sovryn-perpetual-futures",
     }
