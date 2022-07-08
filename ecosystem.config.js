@@ -1,7 +1,7 @@
 module.exports = {
   apps : [{
     name   : "testnet-relayer-btcusd",
-    script : "ts-node src/main.ts",
+    script : "ts-node start.ts",
     max_memory_restart : "1000M",
     log_date_format : "YYYY-MM-DD HH:mm Z",
     env: {
@@ -26,7 +26,7 @@ module.exports = {
   },
   {
     name   : "testnet-relayer-bnbusd",
-    script : "ts-node src/main.ts",
+    script : "ts-node start.ts",
     max_memory_restart : "1000M",
     log_date_format : "YYYY-MM-DD HH:mm Z",
     env: {

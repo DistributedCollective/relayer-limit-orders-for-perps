@@ -158,14 +158,9 @@ async function runMonitoring(io, driverManager, signingManagers) {
             });
             socket.on("getSignals", async (cb) => monitor.getSignals(cb));
             socket.on("getOpenOrders", async (cb) => {
-                // let ammState = await queryAMMState(driverManager, PERP_ID as any);
-                // let markPrice = getMarkPrice(ammState as any);
-                // let ob = orderbook.map( (o: Order) => ({
 
-                // }))
                 return cb({
                     openOrders: orderbook,
-                    // markPrice,
                 });
             });
             socket.on("getNetworkData", async (cb) => monitor.getNetworkData(cb));
