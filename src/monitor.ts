@@ -5,8 +5,11 @@
 const axios = require("axios");
 const { formatEther } = require("ethers/lib/utils");
 
+import * as walletUtils from '@sovryn/perpetual-swap/dist/scripts/utils/walletUtils';
+const {getReadOnlyContractInstance} = walletUtils;
 
-const { PUBLIC_NODE_PROVIDER, BLOCK_EXPLORER, BALANCE_THRESHOLD, PERP_NAME } = process.env;
+
+const { PUBLIC_NODE_PROVIDER, BLOCK_EXPLORER, BALANCE_THRESHOLD, PERP_NAME, PAYMASTER_ADDRESS } = process.env;
 import dbCtrl from "./db";
 
 
@@ -139,6 +142,7 @@ class MonitorController {
         }
 
         let balances = await Promise.all(balancesPromises);
+
         let lastBlocks = await Promise.all(lastBlockPromises);
         
         for (let i = 0; i < balances.length; i++) {
@@ -152,6 +156,19 @@ class MonitorController {
                 nodeUrl: this.signingManagers[i].provider.connection.url
             });
         }
+        let paymaster = await getReadOnlyContractInstance(PAYMASTER_ADDRESS, [this.driverManager.provider.connection.url], 'RbtcPaymaster');
+        let paymasterBalance = await paymaster.getRelayHubDeposit();
+        paymasterBalance = formatEther(paymasterBalance);
+
+        accountWithInfo.push({
+            address: PAYMASTER_ADDRESS,
+            balance: paymasterBalance,
+            balanceThreshold: 0.1,
+            overThreshold: paymasterBalance > 0.1,
+            accountType: 'paymaster',
+            lastBlock: lastBlocks[balances.length - 1],
+            nodeUrl: paymaster.provider.connection.url,
+        });
 
         if (typeof cb === "function") cb(accountWithInfo);
 
