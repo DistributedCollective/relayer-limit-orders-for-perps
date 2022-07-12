@@ -2,8 +2,13 @@ const configFileName = process.argv?.[2] || '.env';
 const path = require('path');
 let configPath = path.resolve(__dirname, '../', configFileName);
 require('dotenv').config({ path: configPath });
+
+const axios = require("axios");
+const ethers = require('ethers');
+
 import { perpQueries } from '@sovryn/perpetual-swap';
 import * as walletUtils from '@sovryn/perpetual-swap/dist/scripts/utils/walletUtils';
+import {BigNumber as BN} from 'ethers';
 
 const {
     MANAGER_ADDRESS,
@@ -55,11 +60,13 @@ import {
     getNumFailures,
     resetFailures,
     isOrderFailed,
+    OrderTS,
 } from './utilFunctions';
 const { getSigningContractInstance, getReadOnlyContractInstance } = walletUtils;
 import TelegramNotifier from './notifier/TelegramNotifier';
 import { v4 as uuidv4 } from 'uuid';
 import { getMarkPrice } from '@sovryn/perpetual-swap/dist/scripts/utils/perpUtils';
+import { ABK64x64ToFloat } from '@sovryn/perpetual-swap/dist/scripts/utils/perpMath';
 const fetch = require('node-fetch');
 const { queryTraderState, queryAMMState, queryPerpParameters } = perpQueries;
 
@@ -96,7 +103,8 @@ async function startRelayer(driverLOB, signingLOBs) {
             `LimitOrder connected to node ${driverLOB.provider.connection.url}\nManager connected to ${driverManager.provider.connection.url}`
         );
 
-        orderbook = await initializeRelayer(signingLOBs, driverManager);
+        // orderbook = await initializeRelayer(signingLOBs, driverManager);
+        orderbook = await initializeRelayerFromTheGraph();
 
         if (process.env.HEARTBEAT_SHOULD_RESTART_URL) {
             //only check if dead after 1 minute after the script started, so it has enough time to send some heartbeats
@@ -438,9 +446,10 @@ async function initializeRelayer(signingLOBs, driverManager) {
 
     numOrders = parseInt(numOrders.toNumber());
     if (numOrders !== result.length) {
-        const msg = `The orderCount (${numOrders}) is different than the actual orders returned (${result.length})`;
+        const msg = `The orderCount (${numOrders}) is different than the actual orders returned (${result.length}). `;
         console.error(msg);
-        throw new Error(msg);
+        result = [...result, ...(await initializeRelayerFromTheGraph())];
+        // throw new Error(msg);
     }
     result = result.filter(
         (o) =>
@@ -452,6 +461,69 @@ async function initializeRelayer(signingLOBs, driverManager) {
         unlockOrder(order.digest, true);
     }
     return orderbook;
+}
+
+async function initializeRelayerFromTheGraph(){
+    try {
+        const endpoint = process.env.GRAPHQL_ENDPOINT;
+        const headers = {
+            "content-type": "application/json",
+        };
+        const graphqlQuery = {
+            query: `{
+               limitOrders(where: {perpetual: "${PERP_ID}", state: "Active"}){
+                  digest
+                  deadline
+                  state
+                  limitPrice
+                  triggerPrice
+                  tradeAmount
+                  trader {
+                    id
+                  }
+                  flags
+                  leverage
+                  createdTimestamp
+                  id
+                }
+              }`,
+        };
+
+        const response = await axios({
+            url: endpoint,
+            method: "post",
+            headers: headers,
+            data: graphqlQuery,
+        });
+
+        let orders: OrderTS[] = <OrderTS[]>[];
+        for (const o of response?.data?.data?.limitOrders || []) {
+            //only add orders that are not expired
+            if(parseInt(o.deadline) < Math.floor(new Date().getTime() / 1000) || isOrderFailed(o.id)){
+                console.log(`Skipping order ${o.id} because it's either failed (${isOrderFailed(o.id)}), or expired? (${parseInt(o.deadline) < Math.floor(new Date().getTime() / 1000)})`);
+                continue;
+            }
+            let order = {
+                iPerpetualId: PERP_ID || '',
+                traderAddr: (o?.trader?.id?.toString() || '') as string,
+                fAmount: ABK64x64ToFloat(BN.from(o.tradeAmount)),
+                fLimitPrice: ABK64x64ToFloat(BN.from(o.limitPrice)),
+                fTriggerPrice: ABK64x64ToFloat(BN.from(o.triggerPrice)),
+                iDeadline: parseInt(o.deadline),
+                referrerAddr: OWNER_ADDRESS || '',
+                flags: o.flags as number,
+                fLeverage: ABK64x64ToFloat(BN.from(o.leverage)),
+                createdTimestamp: parseInt(o.createdTimestamp),
+                digest: o.id,
+            } as OrderTS;
+
+            orders.push(order as any);
+        }
+        return orders;
+    } catch (e) {
+        console.log(`Error in getting limitorders from thegraph: ${e}`);
+    }
+    return [];
 }
 
 async function shouldRestart(runId, heartbeatCode) {
@@ -488,7 +560,7 @@ async function shouldRestart(runId, heartbeatCode) {
             process.exit(1);
         }
     } catch (error) {
-        console.warn(`Error when shouldRestart:`, error);
+        console.error(`Error when shouldRestart:`, error);
     }
 }
 

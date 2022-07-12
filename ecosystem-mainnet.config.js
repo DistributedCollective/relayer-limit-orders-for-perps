@@ -13,7 +13,7 @@ module.exports = {
       PERP_NAME: 'MAINNET-BTCUSD-RELAYER',
       MANAGER_ADDRESS: "0x86f586dc122d31E7654f89eb566B779C3D843e22",
       TOKEN_ADDRESS: "0x6a7F2d2e5D5756729e875c8F8fC254448E763Fdf",
-      NODE_URLS: '["https://bsc.sovryn.app/testnet","https://bsc-dataseed1.binance.org/","https://bsc-dataseed2.binance.org/","https://bsc-dataseed3.binance.org/","https://bsc-dataseed4.binance.org/","https://bsc-dataseed1.defibit.io/","https://bsc-dataseed2.defibit.io/","https://bsc-dataseed3.defibit.io/", "https://bsc-dataseed4.defibit.io/", "https://bsc-dataseed1.ninicoin.io/", "https://bsc-dataseed2.ninicoin.io/", "https://bsc-dataseed3.ninicoin.io/", "https://bsc-dataseed4.ninicoin.io/"]',
+      NODE_URLS: '["https://bsc-dataseed1.binance.org/","https://bsc-dataseed2.binance.org/","https://bsc-dataseed3.binance.org/","https://bsc-dataseed4.binance.org/","https://bsc-dataseed1.defibit.io/","https://bsc-dataseed2.defibit.io/","https://bsc-dataseed3.defibit.io/", "https://bsc-dataseed4.defibit.io/", "https://bsc-dataseed1.ninicoin.io/", "https://bsc-dataseed2.ninicoin.io/", "https://bsc-dataseed3.ninicoin.io/", "https://bsc-dataseed4.ninicoin.io/"]',
       PUBLIC_NODE_PROVIDER: 'https://bsc-dataseed1.binance.org/',
       HEARTBEAT_LISTENER_URL: "https://thenurse.prforge.com/api/heartbeats",
       HEARTBEAT_SHOULD_RESTART_URL: "https://thenurse.prforge.com/api/heartbeats/should-restart",
