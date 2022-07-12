@@ -24,6 +24,7 @@ module.exports = {
       SERVER_PORT: 2006,
       BALANCE_THRESHOLD: 1,
       GRAPHQL_ENDPOINT: "https://api.thegraph.com/subgraphs/name/distributedcollective/sovryn-perpetual-futures",
+      TELEGRAM_CHANNEL_ID: -703916961,
     }
   },
   ]
