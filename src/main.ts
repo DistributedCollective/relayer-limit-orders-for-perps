@@ -456,7 +456,7 @@ async function initializeRelayer(signingLOBs, driverManager) {
     if (numOrders !== result.length) {
         const msg = `The orderCount (${numOrders}) is different than the actual orders returned (${result.length})`;
         console.error(msg);
-        throw new Error(msg);
+        // throw new Error(msg);
     }
     result = result.filter(
         (o) =>
