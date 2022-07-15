@@ -140,12 +140,12 @@ async function startRelayer(driverLOB, signingLOBs) {
         incrementFailures('GENERAL_ERROR');
         const numFailures = getNumFailures('GENERAL_ERROR');
         console.log(
-            `[RELAYER] General error while relaying orders, exiting process. numFailures: ${numFailures}`,
+            `[${PERP_NAME}] General error while relaying orders, exiting process. numFailures: ${numFailures}`,
             error
         );
         if (numFailures >= maxGeneralFailures) {
             await notifier.sendMessage(
-                `[RELAYER] General error while relaying orders: ${
+                `[${PERP_NAME}] General error while relaying orders: ${
                     (error as any).message
                 }. Exiting. numFailures: ${numFailures}`
             );
@@ -286,6 +286,7 @@ function runForNumBlocksManager<T>(
                     blockProcessingErrors = 0;
                     blockProcessing = 0;
                     numBlocks++;
+                    resetFailures('GENERAL_ERROR');
                 } catch (error) {
                     blockProcessing = 0;
                     console.log(`Error in block processing callback:`, error);
