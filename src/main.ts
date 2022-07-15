@@ -1,5 +1,11 @@
+/*
+    1) export MNEMONIC="violin train night pizza protect sheriff battle abuse pond abuse era robot"
+    2) pm2 start ecosystem-mainnet.config.js
+*/
 const configFileName = process.argv?.[2] || '.env';
 const path = require('path');
+const ethers = require("ethers");
+const BN = ethers.BigNumber;
 let configPath = path.resolve(__dirname, '../', configFileName);
 require('dotenv').config({ path: configPath });
 import { perpQueries } from '@sovryn/perpetual-swap';
@@ -403,20 +409,33 @@ function listenForLimitOrderEvents<T>(driverLOB): Promise<void> {
     });
 }
 
+async function pollOrders(LOContract, batchSize : number) {
+    const zero = "0x0000000000000000000000000000000000000000000000000000000000000000";
+    let idx = await LOContract.lastOrderHash();
+    let isFirst = (await LOContract.prevOrderHash(idx)) == zero;
+    let k = 0;
+    while (!isFirst) {
+        // console.log(k);
+        // console.log("current idx=", idx);
+        idx = await LOContract.prevOrderHash(idx);
+        isFirst = (await LOContract.prevOrderHash(idx)) == zero;
+        // console.log("previous idx=", idx);
+        // k++;
+    }
+    let res = await LOContract.pollLimitOrders(idx, BN.from(batchSize));
+    return res;
+}
+
 async function initializeRelayer(signingLOBs, driverManager) {
     let driverLOB = signingLOBs[0];
     //the 0x0 value for the firstDigest actually. We start from it and ask for orders in batches of batchSize
-    let lastDigest =
-        '0x0000000000000000000000000000000000000000000000000000000000000000';
+    let lastDigest;
     let batchSize = 100;
     let result = Array();
     let ordersBatch = Array();
     let digestsBatch = Array();
     do {
-        [ordersBatch, digestsBatch] = await driverLOB.pollLimitOrders(
-            lastDigest,
-            batchSize
-        );
+        [ordersBatch, digestsBatch] = await pollOrders(driverLOB, batchSize);
         let lastBatchElemIdx = digestsBatch.length - 1;
         //the pollLimitOrders method returns the batches filled with zero-values if there are not enough orders to fill the batch, so we get rid of the empty ones
         while (parseInt(digestsBatch[lastBatchElemIdx]) === 0) {
