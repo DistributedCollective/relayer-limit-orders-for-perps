@@ -13,8 +13,6 @@ import * as walletUtils from '@sovryn/perpetual-swap/dist/scripts/utils/walletUt
 
 const axios = require("axios");
 
-import {BigNumber as BN} from 'ethers';
-
 const {
     MANAGER_ADDRESS,
     NODE_URLS,
