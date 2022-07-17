@@ -4,21 +4,20 @@
 */
 const configFileName = process.argv?.[2] || '.env';
 const path = require('path');
-const ethers = require("ethers");
+const ethers = require('ethers');
 const BN = ethers.BigNumber;
 let configPath = path.resolve(__dirname, '../', configFileName);
 require('dotenv').config({ path: configPath });
 import { perpQueries } from '@sovryn/perpetual-swap';
 import * as walletUtils from '@sovryn/perpetual-swap/dist/scripts/utils/walletUtils';
 
-const axios = require("axios");
+const axios = require('axios');
 
 const {
     MANAGER_ADDRESS,
     NODE_URLS,
     ORDER_BOOK_ADDRESS,
     MNEMONIC,
-    MAX_BLOCKS_BEFORE_RECONNECT,
     TELEGRAM_BOT_SECRET,
     TELEGRAM_CHANNEL_ID,
     IDX_ADDR_START,
@@ -26,18 +25,20 @@ const {
     PERP_ID,
     PERP_NAME,
     OWNER_ADDRESS,
-    DB_NAME
+    DB_NAME,
+    INACTIVITY_TIMEOUT,
 } = process.env;
 let bscNodeURLs = JSON.parse(NODE_URLS || '[]');
 
-import dbCtrl from "./db";
-import monitor from "./monitor";
+import dbCtrl from './db';
+import monitor from './monitor';
 
 console.log(
     `Perp name ${PERP_NAME}, Manager address ${MANAGER_ADDRESS}, OrderBook address ${ORDER_BOOK_ADDRESS}`
 );
 
 let maxGeneralFailures = 10;
+let lastSuccessfullBlockProcessed = Date.now();
 
 if (!MNEMONIC) {
     console.log(`ERROR: Mnemonic is not present.`);
@@ -106,6 +107,10 @@ async function startRelayer(driverLOB, signingLOBs) {
 
         orderbook = await initializeRelayer(signingLOBs, driverManager);
 
+        setInterval(() => {
+            shouldRestartLocalCheck();
+        }, 30_000);
+
         if (process.env.HEARTBEAT_SHOULD_RESTART_URL) {
             //only check if dead after 1 minute after the script started, so it has enough time to send some heartbeats
             setTimeout(() => {
@@ -127,10 +132,7 @@ async function startRelayer(driverLOB, signingLOBs) {
 
         await Promise.race([
             listenForLimitOrderEvents(driverLOB),
-            runForNumBlocksManager(
-                driverManager,
-                signingLOBs,
-            ),
+            runForNumBlocksManager(driverManager, signingLOBs),
         ]);
     } catch (error) {
         incrementFailures('GENERAL_ERROR');
@@ -156,20 +158,23 @@ async function runMonitoring(io, driverManager, signingManagers) {
     try {
         await dbCtrl.initDb(DB_NAME);
         monitor.start(driverManager, signingManagers, orderbook);
-        io.on("connection", (socket) => {
-            socket.on("getAccountsInfo", async (cb) => {
+        io.on('connection', (socket) => {
+            socket.on('getAccountsInfo', async (cb) => {
                 monitor.getAccountsInfo(cb);
             });
-            socket.on("getSignals", async (cb) => monitor.getSignals(cb));
-            socket.on("getOpenOrders", async (cb) => {
-
+            socket.on('getSignals', async (cb) => monitor.getSignals(cb));
+            socket.on('getOpenOrders', async (cb) => {
                 return cb({
                     openOrders: orderbook,
                 });
             });
-            socket.on("getNetworkData", async (cb) => monitor.getNetworkData(cb));
+            socket.on('getNetworkData', async (cb) =>
+                monitor.getNetworkData(cb)
+            );
             // socket.on('getTotals', async (cb) => monitor.getTotals(cb));
-            socket.on("getLast24HTotals", async (cb) => monitor.getTotals(cb, true));
+            socket.on('getLast24HTotals', async (cb) =>
+                monitor.getTotals(cb, true)
+            );
             // socket.on('listTroves', async (...args) => monitor.listTroves(...args));
         });
     } catch (error) {
@@ -184,10 +189,7 @@ let blockProcessingErrors = 0;
  * @param signingManager a signing manager contract instance
  * @returns
  */
-function runForNumBlocksManager<T>(
-    driverManager,
-    signingLoBs,
-): Promise<void> {
+function runForNumBlocksManager<T>(driverManager, signingLoBs): Promise<void> {
     return new Promise((resolve, reject) => {
         try {
             driverManager.once('error', (e) => {
@@ -280,6 +282,7 @@ function runForNumBlocksManager<T>(
                     blockProcessingErrors = 0;
                     blockProcessing = 0;
                     numBlocks++;
+                    lastSuccessfullBlockProcessed = Date.now();
                     resetFailures('GENERAL_ERROR');
                 } catch (error) {
                     blockProcessing = 0;
@@ -321,6 +324,7 @@ function runForNumBlocksManager<T>(
                             digest,
                             orderbook
                         );
+                        shouldRestartLocalCheck();
                         return;
                     } catch (error) {
                         console.log(`Error in the Trade event handler`, error);
@@ -334,6 +338,7 @@ function runForNumBlocksManager<T>(
                         digest,
                         orderbook
                     );
+                    shouldRestartLocalCheck();
                 } catch (error) {
                     console.log(
                         `Error in the PerpetualLimitOrderCancelled event handler`,
@@ -393,6 +398,7 @@ function listenForLimitOrderEvents<T>(driverLOB): Promise<void> {
                         digest
                     );
                     console.log(`Got new order: `, order, orderbook);
+                    shouldRestartLocalCheck();
                 }
             );
         } catch (e) {
@@ -407,8 +413,9 @@ function listenForLimitOrderEvents<T>(driverLOB): Promise<void> {
     });
 }
 
-async function pollOrders(LOContract, batchSize : number) {
-    const zero = "0x0000000000000000000000000000000000000000000000000000000000000000";
+async function pollOrders(LOContract, batchSize: number) {
+    const zero =
+        '0x0000000000000000000000000000000000000000000000000000000000000000';
     let idx = await LOContract.lastOrderHash();
     let isFirst = (await LOContract.prevOrderHash(idx)) == zero;
     let k = 0;
@@ -616,11 +623,11 @@ function getTelegramNotifier(telegramSecret, telegramChannel) {
 }
 
 //backup method to get the orderbook using thegraph
-async function initializeRelayerFromTheGraph(){
+async function initializeRelayerFromTheGraph() {
     try {
         const endpoint = process.env.GRAPHQL_ENDPOINT;
         const headers = {
-            "content-type": "application/json",
+            'content-type': 'application/json',
         };
         const graphqlQuery = {
             query: `{
@@ -644,7 +651,7 @@ async function initializeRelayerFromTheGraph(){
 
         const response = await axios({
             url: endpoint,
-            method: "post",
+            method: 'post',
             headers: headers,
             data: graphqlQuery,
         });
@@ -652,8 +659,21 @@ async function initializeRelayerFromTheGraph(){
         let orders: OrderTS[] = <OrderTS[]>[];
         for (const o of response?.data?.data?.limitOrders || []) {
             //only add orders that are not expired
-            if(parseInt(o.deadline) < Math.floor(new Date().getTime() / 1000) || isOrderFailed(o.id)){
-                console.log(`Skipping order ${o.id} because it's either failed (${isOrderFailed(o.id)}), or expired? (${parseInt(o.deadline) < Math.floor(new Date().getTime() / 1000)})`);
+            if (
+                parseInt(o.deadline) <
+                    Math.floor(new Date().getTime() / 1000) ||
+                isOrderFailed(o.id)
+            ) {
+                console.log(
+                    `Skipping order ${
+                        o.id
+                    } because it's either failed (${isOrderFailed(
+                        o.id
+                    )}), or expired? (${
+                        parseInt(o.deadline) <
+                        Math.floor(new Date().getTime() / 1000)
+                    })`
+                );
                 continue;
             }
             let order = {
@@ -677,4 +697,16 @@ async function initializeRelayerFromTheGraph(){
         console.log(`Error in getting limitorders from thegraph: ${e}`);
     }
     return [];
+}
+
+function shouldRestartLocalCheck() {
+    let inactivity = Math.floor(
+        (Date.now() - lastSuccessfullBlockProcessed) / 1000
+    );
+    if (inactivity > parseInt(INACTIVITY_TIMEOUT || '120')) {
+        console.log(
+            `Inactivity timeout (${INACTIVITY_TIMEOUT}) reached (inactive for ${inactivity} seconds). Restarting.`
+        );
+        process.exit(1);
+    }
 }

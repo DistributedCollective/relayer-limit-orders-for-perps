@@ -26,6 +26,7 @@ module.exports = {
       GRAPHQL_ENDPOINT: "https://api.thegraph.com/subgraphs/name/distributedcollective/sovryn-perpetual-futures",
       TELEGRAM_CHANNEL_ID: -703916961,
       PAYMASTER_ADDRESS: "0xd537EB00E053Fc97A58f22b2FB6f064Bd4C10cCA",
+      INACTIVITY_TIMEOUT: 120,
     }
   },
   ]

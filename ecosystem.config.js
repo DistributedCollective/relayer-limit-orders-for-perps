@@ -22,6 +22,7 @@ module.exports = {
       BLOCK_EXPLORER: "https://testnet.bscscan.com/",
       SERVER_PORT: 3014,
       BALANCE_THRESHOLD: 1,
+      INACTIVITY_TIMEOUT: 120,
     }
   },
   {
@@ -47,6 +48,7 @@ module.exports = {
       BLOCK_EXPLORER: "https://testnet.bscscan.com/",
       SERVER_PORT: 3015,
       BALANCE_THRESHOLD: 1,
+      INACTIVITY_TIMEOUT: 120,
     }
   }]
 }
