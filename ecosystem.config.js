@@ -1,6 +1,6 @@
 module.exports = {
   apps : [{
-    name   : "testnet-relayer-btcusd",
+    name   : "testnet-relayer-btcusd-v2",
     script : "ts-node start.ts",
     max_memory_restart : "1000M",
     log_date_format : "YYYY-MM-DD HH:mm Z",
@@ -13,8 +13,7 @@ module.exports = {
       OWNER_ADDRESS:"0xE7c7417D1360B188401f4dd4bc757A0bc4dE433f",
       MANAGER_ADDRESS: "0xc44B7c208DaD00E647F48d00093e510A29579C09",
       TOKEN_ADDRESS: "0xcF3D22A034Fa157985F0Fe71F15477446f80Be26",
-      // NODE_URLS: '["https://data-seed-prebsc-1-s1.binance.org:8545/","https://data-seed-prebsc-2-s1.binance.org:8545/","http://data-seed-prebsc-1-s2.binance.org:8545/","http://data-seed-prebsc-2-s2.binance.org:8545/","https://data-seed-prebsc-1-s3.binance.org:8545","https://data-seed-prebsc-2-s3.binance.org:8545"]',
-      NODE_URLS: '["https://bsc.sovryn.app/testnet"]',
+      NODE_URLS: '["https://data-seed-prebsc-1-s1.binance.org:8545/","https://data-seed-prebsc-2-s1.binance.org:8545/","http://data-seed-prebsc-1-s2.binance.org:8545/","http://data-seed-prebsc-2-s2.binance.org:8545/","https://data-seed-prebsc-1-s3.binance.org:8545","https://data-seed-prebsc-2-s3.binance.org:8545"]',
       HEARTBEAT_LISTENER_URL: "https://thenurse.prforge.com/api/heartbeats",
       HEARTBEAT_SHOULD_RESTART_URL: "https://thenurse.prforge.com/api/heartbeats/should-restart",
       TESTNET: true,
@@ -28,7 +27,7 @@ module.exports = {
     }
   },
   {
-    name   : "testnet-relayer-bnbusd",
+    name   : "testnet-relayer-bnbusd-v2",
     script : "ts-node start.ts",
     max_memory_restart : "1000M",
     log_date_format : "YYYY-MM-DD HH:mm Z",
