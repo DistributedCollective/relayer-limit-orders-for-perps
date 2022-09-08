@@ -127,7 +127,7 @@ async function startRelayer(driverLOB, signingLOBs) {
             );
         }
         
-        setInterval(() => localShouldRestart(), 10_000);
+        setInterval(() => localShouldRestart(), 50_000);
 
         await Promise.race([
             listenForLimitOrderEvents(driverLOB),
