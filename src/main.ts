@@ -27,6 +27,7 @@ const {
     PERP_NAME,
     OWNER_ADDRESS,
     DB_NAME,
+    INACTIVITY_TIMEOUT,
 } = process.env;
 let bscNodeURLs = JSON.parse(NODE_URLS || '[]');
 
@@ -38,6 +39,7 @@ console.log(
 );
 
 let maxGeneralFailures = 10;
+let lastBlockProcessedAt = Math.floor(new Date().getTime() / 1000);
 
 if (!MNEMONIC) {
     console.log(`ERROR: Mnemonic is not present.`);
@@ -124,6 +126,8 @@ async function startRelayer(driverLOB, signingLOBs) {
                 'Env var HEARTBEAT_SHOULD_RESTART_URL is not set, so if the nodes are pausing the connection, can not restart automatically.'
             );
         }
+        
+        setInterval(() => localShouldRestart(), 10_000);
 
         await Promise.race([
             listenForLimitOrderEvents(driverLOB),
@@ -273,6 +277,7 @@ function runForNumBlocksManager<T>(driverManager, signingLoBs): Promise<void> {
                     blockProcessingErrors = 0;
                     blockProcessing = 0;
                     numBlocks++;
+                    lastBlockProcessedAt = Math.floor(new Date().getTime() / 1000);
                     resetFailures('GENERAL_ERROR');
                 } catch (error) {
                     blockProcessing = 0;
@@ -462,6 +467,18 @@ async function initializeRelayer(signingLOBs, driverManager) {
         unlockOrder(order.digest, true);
     }
     return orderbook;
+}
+
+function localShouldRestart(){
+    const now = Math.floor(new Date().getTime() / 1000);
+    const inactivityTimeout = parseInt(INACTIVITY_TIMEOUT || '0') || 120;
+
+    const timeSinceLastBlockProcessed = now - lastBlockProcessedAt;
+    console.log(`Time since last block processed: ${timeSinceLastBlockProcessed}`)
+    if(timeSinceLastBlockProcessed > inactivityTimeout){
+        console.log(`Time since last block processed is ${timeSinceLastBlockProcessed}. INACTIVITY_TIMEOUT set to ${inactivityTimeout}. Exiting...`);
+        process.exit(1);
+    }
 }
 
 async function shouldRestart(runId, heartbeatCode) {
