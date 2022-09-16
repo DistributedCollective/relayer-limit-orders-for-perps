@@ -130,8 +130,14 @@ async function startRelayer(driverLOB, signingLOBs) {
         setInterval(() => localShouldRestart(), 50_000);
 
         await Promise.race([
-            listenForLimitOrderEvents(driverLOB),
-            runForNumBlocksManager(driverManager, signingLOBs),
+            listenForLimitOrderEvents(driverLOB).catch(e => {
+                console.error(`Error in listenForLimitOrderEvents`, e);
+                throw e;
+            }),
+            runForNumBlocksManager(driverManager, signingLOBs).catch(e =>{
+                console.error(`Error in runForNumBlocksManager`, e);
+                throw e;
+            }),
         ]);
     } catch (error) {
         incrementFailures('GENERAL_ERROR');
@@ -222,8 +228,14 @@ function runForNumBlocksManager<T>(driverManager, signingLoBs): Promise<void> {
                     let timeStart = new Date().getTime();
 
                     let [ammData, perpParams] = await Promise.all([
-                        queryAMMState(driverManager, PERP_ID as any),
-                        queryPerpParameters(driverManager, PERP_ID as any),
+                        queryAMMState(driverManager, PERP_ID as any).catch(e => {
+                            console.error(`Error in queryAMMState`, e);
+                            throw e;
+                        }),
+                        queryPerpParameters(driverManager, PERP_ID as any).catch(e => {
+                            console.error(`Error in queryPerpParameters`, e);
+                            throw e;
+                        }),
                     ]);
 
                     let tradeableOrders = getMatchingOrders(
