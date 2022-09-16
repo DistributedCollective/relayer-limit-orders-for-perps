@@ -126,15 +126,15 @@ async function startRelayer(driverLOB, signingLOBs) {
                 'Env var HEARTBEAT_SHOULD_RESTART_URL is not set, so if the nodes are pausing the connection, can not restart automatically.'
             );
         }
-        
+
         setInterval(() => localShouldRestart(), 50_000);
 
         await Promise.race([
-            listenForLimitOrderEvents(driverLOB).catch(e => {
+            listenForLimitOrderEvents(driverLOB).catch((e) => {
                 console.error(`Error in listenForLimitOrderEvents`, e);
                 throw e;
             }),
-            runForNumBlocksManager(driverManager, signingLOBs).catch(e =>{
+            runForNumBlocksManager(driverManager, signingLOBs).catch((e) => {
                 console.error(`Error in runForNumBlocksManager`, e);
                 throw e;
             }),
@@ -228,11 +228,16 @@ function runForNumBlocksManager<T>(driverManager, signingLoBs): Promise<void> {
                     let timeStart = new Date().getTime();
 
                     let [ammData, perpParams] = await Promise.all([
-                        queryAMMState(driverManager, PERP_ID as any).catch(e => {
-                            console.error(`Error in queryAMMState`, e);
-                            throw e;
-                        }),
-                        queryPerpParameters(driverManager, PERP_ID as any).catch(e => {
+                        queryAMMState(driverManager, PERP_ID as any).catch(
+                            (e) => {
+                                console.error(`Error in queryAMMState`, e);
+                                throw e;
+                            }
+                        ),
+                        queryPerpParameters(
+                            driverManager,
+                            PERP_ID as any
+                        ).catch((e) => {
                             console.error(`Error in queryPerpParameters`, e);
                             throw e;
                         }),
@@ -289,7 +294,9 @@ function runForNumBlocksManager<T>(driverManager, signingLoBs): Promise<void> {
                     blockProcessingErrors = 0;
                     blockProcessing = 0;
                     numBlocks++;
-                    lastBlockProcessedAt = Math.floor(new Date().getTime() / 1000);
+                    lastBlockProcessedAt = Math.floor(
+                        new Date().getTime() / 1000
+                    );
                     resetFailures('GENERAL_ERROR');
                 } catch (error) {
                     blockProcessing = 0;
@@ -386,23 +393,29 @@ function listenForLimitOrderEvents<T>(driverLOB): Promise<void> {
                     triggerPrice,
                     iDeadline,
                     referrerAddr,
+                    traderMgnTokenAddr,
                     flags,
                     fLeverage,
                     createdTimestamp,
                     digest
                 ) => {
-                    if (
-                        perpId.toLowerCase() !== (PERP_ID || '').toLowerCase()
-                    ) {
-                        return;
+                    try {
+                        if (
+                            perpId.toLowerCase() !==
+                            (PERP_ID || '').toLowerCase()
+                        ) {
+                            return;
+                        }
+                        let order = await driverLOB.orderOfDigest(digest);
+                        orderbook = addOrderToOrderbook(
+                            order as Order,
+                            orderbook,
+                            digest
+                        );
+                        console.log(`Got new order: `, order, orderbook);
+                    } catch (e) {
+                        console.log(`Error in the event handler PerpetualLimitOrderCreated`, e);
                     }
-                    let order = await driverLOB.orderOfDigest(digest);
-                    orderbook = addOrderToOrderbook(
-                        order as Order,
-                        orderbook,
-                        digest
-                    );
-                    console.log(`Got new order: `, order, orderbook);
                 }
             );
         } catch (e) {
@@ -481,14 +494,18 @@ async function initializeRelayer(signingLOBs, driverManager) {
     return orderbook;
 }
 
-function localShouldRestart(){
+function localShouldRestart() {
     const now = Math.floor(new Date().getTime() / 1000);
     const inactivityTimeout = parseInt(INACTIVITY_TIMEOUT || '0') || 120;
 
     const timeSinceLastBlockProcessed = now - lastBlockProcessedAt;
-    console.log(`Time since last block processed: ${timeSinceLastBlockProcessed}`)
-    if(timeSinceLastBlockProcessed > inactivityTimeout){
-        console.log(`Time since last block processed is ${timeSinceLastBlockProcessed}. INACTIVITY_TIMEOUT set to ${inactivityTimeout}. Exiting...`);
+    console.log(
+        `Time since last block processed: ${timeSinceLastBlockProcessed}`
+    );
+    if (timeSinceLastBlockProcessed > inactivityTimeout) {
+        console.log(
+            `Time since last block processed is ${timeSinceLastBlockProcessed}. INACTIVITY_TIMEOUT set to ${inactivityTimeout}. Exiting...`
+        );
         process.exit(1);
     }
 }
